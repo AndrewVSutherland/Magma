@@ -1,4 +1,4 @@
-freeze;
+//freeze;
 
 // Various functions useful for working with Dirichlet characters, their Galois orbits, and Conrey labels
 
@@ -1108,13 +1108,13 @@ end intrinsic;
 
 intrinsic ConreyLabels (chi::GrpDrchElt) -> SeqEnum[RngIntElt]
 { Sorted list of Conrey indexes of the Galois conjugates of the specified Dirichlet charatacter. }
-    qs := sprint(Modulus(chi));
+    qs := sprint(Modulus(chi)) cat ".";
     return [qs cat IntegerToString(n): n in ConreyIndexes(chi)];
 end intrinsic;
 
 intrinsic ConreyLabels (s::MonStgElt) -> SeqEnum[MonSTgElt]
 { Returns a sorted list of labels of all Conrey characters q.m conjugate to specified Conrey character or in specified character orbit. }
-    qs := Split(s,".")[1];
+    qs := Split(s,".")[1] cat ".";
     return [qs cat IntegerToString(n): n in ConreyIndexes(s)];
 end intrinsic;
 
