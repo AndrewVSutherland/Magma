@@ -107,7 +107,7 @@ end intrinsic;
 
 intrinsic strip(X::MonStgElt) -> MonStgElt
 { Strips spaces and carraige returns from string; used to be faster than StripWhiteSpace, now that StripWhiteSpace is faster we just call it. }
-    StripWhiteSpace(X);
+    return StripWhiteSpace(X);
 end intrinsic;
 
 intrinsic sprint(X::.) -> MonStgElt
