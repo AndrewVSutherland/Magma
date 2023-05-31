@@ -484,3 +484,15 @@ intrinsic PrintProfile(:All:=false)
     S := ProfileTimes(:All:=All);
     for r in S do printf "%.3os in %o calls to %o\n",r`Time,r`Count,r`Name; end for;
 end intrinsic;
+
+intrinsic WriteStderr(s::MonStgElt)
+{ write to stderr }
+  E := Open("/dev/stderr", "a");
+  Write(E, s);
+  Flush(E);
+end intrinsic;
+
+intrinsic WriteStderr(e::Err)
+{ write to stderr }
+  WriteStderr(Sprint(e) cat "\n");
+end intrinsic;
