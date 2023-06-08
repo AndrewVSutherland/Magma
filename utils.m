@@ -485,6 +485,30 @@ intrinsic PrintProfile(:All:=false)
     for r in S do printf "%.3os in %o calls to %o\n",r`Time,r`Count,r`Name; end for;
 end intrinsic;
 
+
+intrinsic GetFilenames(I::Intrinsic) -> SeqEnum
+{ Return the filenames where such intrinsics are defined }
+    lines := Split(Sprint(I, "Maximal"));
+    res := [];
+    def := "Defined in file: ";
+    for i->line in lines do
+        if line[1] eq "(" and Position(line, "->") ne 0 then
+            s := Split(StripWhiteSpace(line), "->");
+            assert #s eq 2;
+            arguments := [Split(elt, ":")[2] : elt in Split(&cat Split(s[1], "()"))];
+            values := Split(s[2], ",");
+            if i gt 1 and lines[i-1][1..#def] eq def then
+                comma := Position(lines[i-1], ",");
+                filename := lines[i-1][#def + 1..comma-1];
+            else
+                filename := "";
+            end if;
+            Append(~res, <filename, arguments, values>);
+        end if;
+    end for;
+    return res;
+end intrinsic;
+
 intrinsic WriteStderr(s::MonStgElt)
 { write to stderr }
   E := Open("/dev/stderr", "a");
