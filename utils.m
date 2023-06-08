@@ -107,7 +107,7 @@ end intrinsic;
 
 intrinsic strip(X::MonStgElt) -> MonStgElt
 { Strips spaces and carraige returns from string; used to be faster than StripWhiteSpace, now that StripWhiteSpace is faster we just call it. }
-    StripWhiteSpace(X);
+    return StripWhiteSpace(X);
 end intrinsic;
 
 intrinsic sprint(X::.) -> MonStgElt
@@ -486,9 +486,9 @@ intrinsic PrintProfile(:All:=false)
 end intrinsic;
 
 
-intrinsic GetFilenames(int::Intrinsic) -> SeqEnum
+intrinsic GetFilenames(I::Intrinsic) -> SeqEnum
 { Return the filenames where such intrinsics are defined }
-    lines := Split(Sprint(int, "Maximal"));
+    lines := Split(Sprint(I, "Maximal"));
     res := [];
     def := "Defined in file: ";
     for i->line in lines do
@@ -507,4 +507,16 @@ intrinsic GetFilenames(int::Intrinsic) -> SeqEnum
         end if;
     end for;
     return res;
+end intrinsic;
+
+intrinsic WriteStderr(s::MonStgElt)
+{ write to stderr }
+  E := Open("/dev/stderr", "a");
+  Write(E, s);
+  Flush(E);
+end intrinsic;
+
+intrinsic WriteStderr(e::Err)
+{ write to stderr }
+  WriteStderr(Sprint(e) cat "\n");
 end intrinsic;
