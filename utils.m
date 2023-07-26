@@ -503,7 +503,19 @@ intrinsic Log (a::RngIntResElt, b::RngIntResElt) -> RngIntElt
     L := [qlog(P[i][1],P[i][2],M[i],a,b) : i in [1..#P]];
     if -1 in L then return -1; end if;
     return CRT(L,M);
-end intrinsic; 
+end intrinsic;
+
+intrinsic C4C6Invariants(E::CrvEll[FldRat]) -> RngInt, RngInt
+{ Returns the c4 and c6 invariants of the specified elliptic curve E/Q (assumes E is defined by an integral model). }
+    a := Coefficients(E);
+    b2 := a[1]^2+4*a[2];
+    b4 := a[1]*a[3]+2*a[4];
+    b6 := a[3]^2+4*a[5];
+    b8 := a[1]^2*a[5] - a[1]*a[3]*a[4] + 4*a[2]*a[5] + a[2]*a[3]^2 - a[4]^2;
+    c4 := b2^2-24*b4;
+    c6 := -b2^3+36*b2*b4-216*b6;
+    return Integers()!(b2^2-24*b4),Integers()!(-b2^3+36*b2*b4-216*b6);
+end intrinsic;
 
 intrinsic GetFilenames(I::Intrinsic) -> SeqEnum
 { Return the filenames where such intrinsics are defined }
