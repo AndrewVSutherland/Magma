@@ -1,8 +1,25 @@
 freeze;
 
+intrinsic ProfileTimes(:All:=false) -> SeqEnum
+{ Lists vertices in profile graph in order of time.  You need to SetProfile(true), run something, then call this (which will SetProfile(false) before dumping). }
+    SetProfile(false);
+    return S where S := Sort([Label(V!i):i in [1..#V]|All or (r`Count gt 0 and r`Time gt 0.01 where r:=Label(V!i))] where V:=Vertices(ProfileGraph()),func<a,b|a`Time-b`Time>);
+end intrinsic;
+
+intrinsic PrintProfile(:All:=false)
+{ Lists vertices in profile graph in order of time.  You need to SetProfile(true), run something, then call this (which will SetProfile(false) before dumping). }
+    S := ProfileTimes(:All:=All);
+    for r in S do printf "%.3os in %o calls to %o\n",r`Time,r`Count,r`Name; end for;
+end intrinsic;
+
 intrinsic Factorization(r::FldRatElt) -> SeqEnum
 { The prime factorization of the rational number r. }
     return Sort(Factorization(Numerator(r)) cat [<a[1],-a[2]>:a in Factorization(Denominator(r))]);
+end intrinsic;
+
+intrinsic GSp(d::RngIntElt, q::RngIntElt) -> GrpMat
+{ The group of symplectic similitudes of degree d over F_q. }
+    return CSp(d,q);
 end intrinsic;
 
 intrinsic Eltseq(s::SetMulti[RngIntElt]) -> SeqEnum
@@ -152,6 +169,11 @@ intrinsic StringsToAssociativeArray(s::SeqEnum[MonStgElt]) -> Assoc
     return A;
 end intrinsic;
 
+intrinsic atod(s::SeqEnum[MonStgElt]) -> Assoc
+{ Converts a list of strings "a=b" to an associative array A with string keys and values such that A[a]=b (alias for StringsToAssociativeArray). }
+    return StringsToAssociativeArray(s);
+end intrinsic;
+
 intrinsic StringToIntegerArray(s::MonStgElt) -> SeqEnum[RngIntElt]
 { Given string representing a sequence of integers, returns the sequence (faster and safer than eval). }
     t := strip(s);
@@ -236,6 +258,11 @@ intrinsic atofff(s::MonStgElt) -> SeqEnum[RngIntElt]
     return [[RealField()|StringToReal(n):n in Split(a[1] eq "]" select "" else Split(a,"]")[1],",")]:a in r];
 end intrinsic;
 
+intrinsic goodp(f::RngUPolElt,p::RngIntElt) -> RngIntElt
+{ Returns true if the specified polynomial is square free modulo p (without computing the discrimnant of f). }
+    return Discriminant(PolynomialRing(GF(p))!f) ne 0;
+end intrinsic;
+
 intrinsic Base26Encode(n::RngIntElt) -> MonStgElt
 { Given a nonnegative integer n, returns its encoding in base-26 (a=0,..., z=25, ba=26,...). }
     require n ge 0: "n must be a nonnegative integer";
@@ -278,7 +305,7 @@ intrinsic CyclicGenerators(G::GrpAb) -> SeqEnum[GrpAb]
     if #G eq 1 then return [Identity(G)]; end if;
     if #Generators(G) eq 1 then g := G.1; return [e*g:e in Reverse(Divisors(Exponent(G)))]; end if;
     X := [[Identity(G)] cat &cat[[H`subgroup.1: H in Subgroups(Gp:Sub:=[n])]:n in Reverse(Divisors(Exponent(Gp)))|n gt 1] where Gp:=SylowSubgroup(G,p):p in PrimeDivisors(Exponent(G))];
-    return [&*z:z in CartesianProduct(X)];
+    return [&+[z[i]:i in [1..#z]]:z in CartesianProduct(X)];
 end intrinsic;
 
 intrinsic ConjugateIntersection(G::Grp, H1::Grp, H2::Grp) -> Grp
@@ -422,10 +449,20 @@ intrinsic RegularRepresentation(H::Grp) -> GrpPerm
     return H;
 end intrinsic;
 
+intrinsic HurwitzClassNumber(N::RngIntElt) -> FldRatElt
+{ The Hurwitz class number of positive definite binary quadratic forms of discriminant -Abs(N) with each class C counted with multiplicit 1/#Aut(C). }
+    if N eq 0 then return -1/12; end if; if N gt 0 then N := -N; end if;
+    if not N mod 4 in [0,1] then return 0; end if;
+    D := FundamentalDiscriminant(N); f := Integers()!Sqrt(N/D); w := D lt -4 select 1 else (D lt -3 select 2 else 3);
+    return ClassNumber(D)/w * &+[MoebiusMu(d)*KroneckerSymbol(D,d)*SumOfDivisors(f div d):d in Divisors(f)];
+end intrinsic;
+
 intrinsic KroneckerClassNumber(D::RngIntElt) -> RngIntElt
 { The sum of the class numbers of the discriminants DD that divide the given imaginary quadratic discriminant D (this is not the same as the Hurwitz class number, in particular it is always an integer). }
     require D lt 0 and IsDiscriminant(D): "D must be an imaginary quadratic discriminant.";
-    D0 := FundamentalDiscriminant(D); _,f := IsSquare(D div D0);
+    D0 := FundamentalDiscriminant(D);
+    if D0 lt -4 then return HurwitzClassNumber(D); end if;
+    _,f := IsSquare(D div D0);
     return &+[ClassNumber(d^2*D0): d in Divisors(f)];
 end intrinsic;
 
@@ -468,19 +505,4 @@ intrinsic Log (a::RngIntResElt, b::RngIntResElt) -> RngIntElt
     return CRT(L,M);
 end intrinsic; 
 
-intrinsic GSp(d::RngIntElt, q::RngIntElt) -> GrpMat
-{ The group of symplectic similitudes of degree d over F_q. }
-    return CSp(d,q);
-end intrinsic;
 
-intrinsic ProfileTimes(:All:=false) -> SeqEnum
-{ Lists vertices in profile graph in order of time.  You need to SetProfile(true), run something, then call this (which will SetProfile(false) before dumping). }
-    SetProfile(false);
-    return S where S := Sort([Label(V!i):i in [1..#V]|All or (r`Count gt 0 and r`Time gt 0.01 where r:=Label(V!i))] where V:=Vertices(ProfileGraph()),func<a,b|a`Time-b`Time>);
-end intrinsic;
-
-intrinsic PrintProfile(:All:=false)
-{ Lists vertices in profile graph in order of time.  You need to SetProfile(true), run something, then call this (which will SetProfile(false) before dumping). }
-    S := ProfileTimes(:All:=All);
-    for r in S do printf "%.3os in %o calls to %o\n",r`Time,r`Count,r`Name; end for;
-end intrinsic;
