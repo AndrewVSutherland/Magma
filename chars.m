@@ -1,11 +1,11 @@
-//freeze;
+freeze;
 
 // Various functions useful for working with Dirichlet characters, their Galois orbits, and Conrey labels
 
 // depends on utils.m
 
 intrinsic IsCyclic (N::RngIntElt) -> BoolElt
-{ Returns true (Z/NZ)* is cyclic, false otherwise. }
+{ Returns true if (Z/NZ)* is cyclic, false otherwise. }
     return N lt 8 or (N mod 4 eq 2 and IsPrimePower(N div 2)) or IsPrimePower(N);
 end intrinsic;
 
@@ -123,7 +123,7 @@ intrinsic NumberOfCharacterOrbits (N::RngIntElt:OrderBound:=0) -> RngIntElt
     require N gt 0: "Modulus N must be a positive integer";
     if N le 2 then return 1; end if;
     if N mod 4 eq 2 then N div:= 2; end if;
-    b,p,e := IsPrimePower(N);  if b then return p eq 2 select 2*(e-1) else e*NumberOfDivisors(p-1); end if;
+    b,p,e := IsPrimePower(N);  if b and OrderBound eq 0 then return p eq 2 select 2*(e-1) else e*NumberOfDivisors(p-1); end if;
     X := OrderStats(MultiplicativeGroup(Integers(N)));  S := Set(X);  if OrderBound gt 0 then S := {n: n in S| n le OrderBound}; end if;
     return &+[Multiplicity(X,n) div EulerPhi(n):n in S];
 end intrinsic;
@@ -365,10 +365,10 @@ intrinsic IsConjugate(s::MonStgElt,t::MonStgElt) -> BoolElt
     return IsConreyConjugate(s,t);
 end intrinsic;
 
-intrinsic ConreyCharacterOrbitReps(q::RngIntElt) -> SeqEnum[MonStgElt]
+intrinsic ConreyCharacterOrbitRepIndexes(q::RngIntElt:ParityEquals:=0,ConductorDivides:=0,ConductorBound:=0,DegreeBound:=0,OrderBound:=0) -> SeqEnum[MonStgElt]
 { The list of minimal index Conrey labels of Galois orbit representatives of the full Dirichlet group sorted by order and trace vectors. }
     require q gt 0: "Modulus must be positive.";
-    if q le 2 then return [Sprintf("%o.1",q)]; end if;
+    if q le 2 then return ParityEquals eq -1 select [] else [1]; end if;
     U,pi := MultiplicativeGroup(Integers(q));
     A := [Integers()|Min([pi(n*x):n in [1..m]|GCD(m,n) eq 1]) where m:=Order(x):x in CyclicGenerators(U)];
     if #A lt 100 then
@@ -378,7 +378,17 @@ intrinsic ConreyCharacterOrbitReps(q::RngIntElt) -> SeqEnum[MonStgElt]
         K := Sort([k:k in Keys(Y)]);
         X := &cat[Sort(Y[k],func<a,b|CompareConreyCharacters(q,Integers()!a,Integers()!b,100)>):k in K];
     end if;
-    return [ s cat IntegerToString(n) : n in X] where s:=IntegerToString(q) cat ".";
+    if ParityEquals ne 0 then X := [n:n in X|Parity(q,n) eq ParityEquals]; end if;
+    if OrderBound ne 0 then X := [n:n in X|Order(q,n) le OrderBound]; end if;
+    if DegreeBound ne 0 then X := [n:n in X|Degree(q,n) le DegreeBound]; end if;
+    if ConductorBound ne 0 then X := [n:n in X|Conductor(q,n) le ConductorBound]; end if;
+    if ConductorDivides ne 0 then X := [n:n in X|ConductorDivides mod Conductor(q,n) eq 0]; end if;
+    return X;
+end intrinsic;
+
+intrinsic ConreyCharacterOrbitReps(q::RngIntElt:parity:=0,ConductorDivides:=0) -> SeqEnum[MonStgElt]
+{ The list of minimal index Conrey labels of Galois orbit representatives of the full Dirichlet group sorted by order and trace vectors. }
+    return [s cat IntegerToString(n): n in X] where X:=ConreyCharacterOrbitRepIndexes(q:parity:=parity,ConductorDivides:=ConductorDivides) where s:=IntegerToString(q) cat ".";
 end intrinsic;
 
 intrinsic ConreyCharacterOrbitRep (s::MonStgElt) -> MonStgElt
@@ -750,6 +760,11 @@ intrinsic ConreyCharacterFromLabel (s::MonStgElt) -> RngIntElt, RngIntElt
     return q,n;
 end intrinsic;
 
+intrinsic Order (q::RngIntElt, n::RngIntElt) -> RngIntElt
+{ The order of the Conrey character q.n. }
+    return q le 2 select 1 else Order(Integers(q)!n);
+end intrinsic;
+
 intrinsic Order (s::MonStgElt) -> RngIntElt
 { The order of the Conrey character q.n or character orbit label q.a. }
     if IsCharacterLabel(s) then
@@ -825,7 +840,8 @@ end intrinsic;
 intrinsic Parity (q::RngIntElt, n::RngIntElt) -> RngIntElt
 { The parity of the Conrey character q.n. }
     require q gt 0 and n gt 0 and GCD(q,n) eq 1: "Conrey characters must be specified by a pair of coprime positive integers q,n.";
-    return &*[Integers()|IsSquare(Integers(p)!n) select 1 else -1 : p in PrimeDivisors(q)] * (IsDivisibleBy(q,4) select (n mod 4 eq 1 select 1 else -1) else 1);
+    Q := PrimeDivisors(q);
+    return &*[Integers()|IsSquare(Integers(p)!n) select 1 else -1 : p in Q] * (IsDivisibleBy(q,4) select (n mod 4 eq 1 select 1 else -1) else 1);
 end intrinsic;
 
 intrinsic Parity (s::MonStgElt) -> RngIntElt
@@ -1158,13 +1174,13 @@ end intrinsic;
 intrinsic ConreyLabels (chi::GrpDrchElt) -> SeqEnum[RngIntElt]
 { Sorted list of Conrey indexes of the Galois conjugates of the specified Dirichlet charatacter. }
     qs := sprint(Modulus(chi));
-    return [qs cat IntegerToString(n): n in ConreyIndexes(chi)];
+    return [qs cat "." cat IntegerToString(n): n in ConreyIndexes(chi)];
 end intrinsic;
 
 intrinsic ConreyLabels (s::MonStgElt) -> SeqEnum[MonSTgElt]
 { Returns a sorted list of labels of all Conrey characters q.m conjugate to specified Conrey character or in specified character orbit. }
     qs := Split(s,".")[1];
-    return [qs cat IntegerToString(n): n in ConreyIndexes(s)];
+    return [qs cat "." cat IntegerToString(n): n in ConreyIndexes(s)];
 end intrinsic;
 
 intrinsic ConreyOrbitTable (filename::MonStgElt, M::RngIntElt) -> SeqEnum[SeqEnum[RngIntElt]]
@@ -1247,3 +1263,13 @@ intrinsic IsReal (xi::Map, N::RngIntElt) -> Bool
     return Order(xi,N) le 2;
 end intrinsic;
 
+intrinsic NewModularSymbols (s::MonStgElt, k::RngIntElt) -> ModSym
+{ Returns newspace of modular symbols of weight k for the Dirichlet character chi with sign -1. }
+    return NewSubspace(CuspidalSubspace(ModularSymbols(DirichletCharacter(s),k,-1)));
+end intrinsic;
+
+intrinsic NewModularSymbols (s::MonStgElt) -> ModSym
+{ Returns newspace of modular symbols of weight k for the newspace with label s. }
+    t := Split(s,".");
+    return NewSubspace(CuspidalSubspace(ModularSymbols(DirichletCharacter(t[1] cat "." cat t[3]),atoi(t[2]),-1)));
+end intrinsic;

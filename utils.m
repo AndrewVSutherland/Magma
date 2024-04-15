@@ -450,18 +450,18 @@ intrinsic RegularRepresentation(H::Grp) -> GrpPerm
 end intrinsic;
 
 intrinsic HurwitzClassNumber(N::RngIntElt) -> FldRatElt
-{ The Hurwitz class number of positive definite binary quadratic forms of discriminant -Abs(N) with each class C counted with multiplicit 1/#Aut(C). }
-    if N eq 0 then return -1/12; end if; if N gt 0 then N := -N; end if;
-    if not N mod 4 in [0,1] then return 0; end if;
-    D := FundamentalDiscriminant(N); f := Integers()!Sqrt(N/D); w := D lt -4 select 1 else (D lt -3 select 2 else 3);
+{ The Hurwitz class number of positive definite binary quadratic forms of discriminant -N with each class C counted with multiplicity 1/#Aut(C), extended by Zagier to H(0)=-1/12 and H(-u^2)=-u/2, with H(-n) = 0 for all nonsquare n>0. }
+    if N eq 0 then return -1/12; end if; if N lt 0 then b,u:=IsSquare(N); return b select -u/2 else 0;  end if;
+    if not N mod 4 in [0,3] then return 0; end if;
+    D := FundamentalDiscriminant(-N); f := Integers()!Sqrt(-N/D); w := D lt -4 select 1 else (D lt -3 select 2 else 3);
     return ClassNumber(D)/w * &+[MoebiusMu(d)*KroneckerSymbol(D,d)*SumOfDivisors(f div d):d in Divisors(f)];
 end intrinsic;
 
 intrinsic KroneckerClassNumber(D::RngIntElt) -> RngIntElt
-{ The sum of the class numbers of the discriminants DD that divide the given imaginary quadratic discriminant D (this is not the same as the Hurwitz class number, in particular it is always an integer). }
+{ The sum of the class numbers of the discriminants DD that divide the given imaginary quadratic discriminant D (this is not the same as the Hurwitz class number of -D, in particular, it is always an integer). }
     require D lt 0 and IsDiscriminant(D): "D must be an imaginary quadratic discriminant.";
     D0 := FundamentalDiscriminant(D);
-    if D0 lt -4 then return HurwitzClassNumber(D); end if;
+    if D0 lt -4 then return HurwitzClassNumber(-D); end if;
     _,f := IsSquare(D div D0);
     return &+[ClassNumber(d^2*D0): d in Divisors(f)];
 end intrinsic;
