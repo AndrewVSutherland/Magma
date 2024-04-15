@@ -35,6 +35,20 @@ intrinsic ReplaceCharacter(s::MonStgElt,c::MonStgElt,d::MonStgElt) -> MonStgElt
     return Join(t,d);
 end intrinsic;
 
+intrinsic ReplaceString(s::MonStgElt,c::MonStgElt,d::MonStgElt) -> MonStgElt
+{ Greedily replace each occurrence of string c in s with the string d. }
+    require #c ge 1: "The string to be replaced cannot be empty.";
+    m := #c;
+    t := "";
+    n := Index(s,c);
+    while n gt 0 do
+        t cat:= s[1..n-1] cat d;
+        s := s[n+m..#s];
+        n := Index(s,c);
+    end while;
+    return t cat s;
+end intrinsic;
+
 intrinsic djb2(s::MonStgElt:b:=64) -> RngIntElt
 { Returns the b-bit djb2 hash of s. Default value of b is 64. }
     h:=5381; m:=2^b-1; s := BinaryString(s);
