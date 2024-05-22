@@ -904,7 +904,7 @@ intrinsic GL2RightTransversal(H::GrpMat) -> SeqEnum[GrpMatElt]
     dindex := GL2DeterminantIndex(H);
     K := SL2Intersection(H);
     M,K := SL2Level(H);
-    S := SL2RightTransversal(K);
+    S := RightTransversal(SL2Ambient(M),K);
     S := [lift(h):h in S] where lift:=SL2ElementLifter(M,N);
     if dindex gt 1 then
         G := GL2Ambient(N);
