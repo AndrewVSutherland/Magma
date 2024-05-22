@@ -336,24 +336,30 @@ intrinsic ConjugateCompositum(G::Grp, H1::Grp, H2::Grp) -> Grp
     return S[Min(I)[2]];
 end intrinsic;
 
-intrinsic IndexFibers (S::SeqEnum, f::UserProgram : Unique:=false, Project:=func<r|r>) -> Assoc
+getval := func<X,k| b select v else [] where b,v := IsDefined(X,k)>;
+
+intrinsic IndexFibers (S::SeqEnum, f::UserProgram : Unique:=false, Project:=false) -> Assoc
 { Given a list of objects S and a function f on S creates an associative array satisfying A[f(s)] = [t:t in S|f(t) eq f(s)]. }
     A := AssociativeArray();
-    if Unique then
-        for x in S do y := f(x); assert not IsDefined(A,y); A[y]:=Project(x); end for;
-    else 
-        for x in S do y := f(x); A[y] := IsDefined(A,y) select Append(A[y],Project(x)) else [Project(x)]; end for;
+    if Type(Project) eq UserProgram then
+        if Unique then for x in S do A[f(x)] := Project(x); end for; return A; end if;
+        for x in S do y := f(x); A[y] := Append(getval(A,y),Project(x)); end for;
+    else
+        if Unique then for x in S do A[f(x)] := x; end for; return A; end if;
+        for x in S do y := f(x); A[y] := Append(getval(A,y),x); end for;
     end if;
     return A;
 end intrinsic;
 
-intrinsic IndexFibers (S::List, f::UserProgram : Unique:=false, Project:=func<r|r>) -> Assoc
+intrinsic IndexFibers (S::List, f::UserProgram : Unique:=false, Project:=false) -> Assoc
 { Given a list of objects S and a function f on S creates an associative array satisfying A[f(s)] = [t:t in S|f(t) eq f(s)]. }
     A := AssociativeArray();
-    if Unique then
-        for x in S do y := f(x); assert not IsDefined(A,y); A[y]:=Project(x); end for;
-    else 
-        for x in S do y := f(x); A[y] := IsDefined(A,y) select Append(A[y],Project(x)) else [*Project(x)*]; end for;
+    if Type(Project) eq UserProgram then
+        if Unique then for x in S do A[f(x)] := Project(x); end for; return A; end if;
+        for x in S do y := f(x); A[y] := Append(getval(A,y),Project(x)); end for;
+    else
+        if Unique then for x in S do A[f(x)] := x; end for; return A; end if;
+        for x in S do y := f(x); A[y] := Append(getval(A,y),x); end for;
     end if;
     return A;
 end intrinsic;
@@ -564,4 +570,110 @@ end intrinsic;
 intrinsic WriteStderr(e::Err)
 { write to stderr }
   WriteStderr(Sprint(e) cat "\n");
+end intrinsic;
+
+intrinsic MonicQuadraticRoots(b::RngIntElt, c::RngIntElt, p::RngIntElt, e:RngIntElt) -> SeqEnum[RngIntElt]
+{ Returns the complete list of solutions to x^2+bx+c = 0 in Z/p^eZ for p prime and e ge 1 (does not verify the primality of p). }
+    require e gt 0: "e must be positive";
+    q := p^e;
+    b mod:= q; c mod:= q;
+    // for the sake of simplicity we just hensel linearly; this could/should be improved
+    if p eq 2 then
+        if IsOdd(c) and IsOdd(b) then return [Integers()|]; end if;
+        S := IsEven(c) select (IsOdd(b) select [0,1] else [0]) else [1];
+    else
+        bp := GF(p)!b;
+        s,u := IsSquare(bp^2-4*c);
+        if not s then return [Integers()|]; end if;
+        S := u eq 0 select [Integers()|-bp/2] else [Integers()|(-bp-u)/2,(-bp+u)/2]; // solutions mod p
+    end if;
+    m := p;
+    lift := func<x,p,m|x+m*Integers()!(-1/(GF(p)!2*x+b)*((x*(x+b)+c) div m))>;
+    for n:=2 to e do
+        mm := m*p;
+        S := &cat[(2*x+b) mod p eq 0 select ((x*(x+b)+c) mod mm eq 0 select [x+m*i:i in [0..p-1]] else [Integers()|]) else [lift(x,p,m)] : x in S];
+        if #S eq 0 then return S; end if;
+        m := mm;
+    end for;
+    return S;
+end intrinsic;
+
+intrinsic MonicQuadraticRoots(b::RngIntElt, c::RngIntElt, m::RngIntElt) -> SeqEnum[RngIntElt]
+{ Returns the complete list of solutions to x^2+bx+c = 0 in Z/mZ. }
+    require m ge 2: "m must be at least 2";
+    M := Factorization(m);
+    return [CRT([v[i]:i in [1..#M]],[a[1]^a[2]:a in M]) : v in CartesianProduct([MonicQuadraticRoots(b,c,a[1],a[2]):a in M])];
+end intrinsic;
+
+intrinsic ChangeRing(f::RngUPolElt, pi::Map) -> RngUPolElt
+{ Given f = sum a_i*x^i returns sum pi(a_i)*x^i }
+    return PolynomialRing(Codomain(pi))![pi(c):c in Coefficients(f)];
+end intrinsic;
+
+intrinsic PrimePowers(B::RngIntElt) -> SeqEnum[RngInt]
+{ Ordered list of prime powers q <= B (complexity is O(B log(B) loglog(B)), which is suboptimal but much better than testing individual prime powers). }
+    if B lt 2 then return [Integers()|]; end if;
+    P := PrimesInInterval(2,B); L := Floor(Log(2,B));
+    I := [#P] cat [Index(P,NextPrime(Floor(B^(1/n))))-1:n in [2..L]];
+    // sorting is asymptotically stupid (we could merge in linear time or just sieve), but this is not the dominant step for the B we care about
+    // even at 10^9 more than half the time is spent enumerating primes
+    return Sort(&cat[[p^n:p in P[1..I[n]]]:n in [1..L]]);
+end intrinsic;
+
+intrinsic ProperDivisors(N::RngIntElt) -> SeqEnum[RngIntElt]
+{ Sorted list of postive proper divisors of the integer N. }
+    return N eq 1 select [] else D[2..#D-1] where D:=Divisors(N);
+end intrinsic;
+
+intrinsic PrimesInInterval(K::FldNum,min::RngIntElt,max::RngIntElt:coprime_to:=1) -> SeqEnum
+{ Primes of K with norm in [min,max]. }
+    S := PrimesUpTo(max,K:coprime_to:=coprime_to); 
+    return max lt 2 select S else [p:p in S|Norm(p) ge min];
+end intrinsic;
+
+// This is often slower than &+[r[2]:r in Roots(f)] but faster when f has lots of roots, e.g. splits completely
+intrinsic NumberOfRoots(f::RngUPolElt[FldFin]) -> RngIntElt
+{ The number of rational roots of the polynomial f. }
+    a := SquareFreeFactorization(f);
+    b := [DistinctDegreeFactorization(r[1]:Degree:=1):r in a];
+    return &+[a[i][2]*(#b[i] gt 0 select Degree(b[i][1][2]) else 0):i in [1..#a]];
+end intrinsic;
+
+intrinsic TracesToLPolynomial (t::SeqEnum[RngIntElt], q::RngIntElt) -> RngUPolElt
+{ Given a sequence of Frobenius traces of a genus g curve over Fq,Fq^2,...,Fq^g returns the corresponding L-polynomial. }
+    require IsPrimePower(q): "q must be a prime power.";
+    R<T> := PolynomialRing(Integers());
+    if #t eq 0 then return R!1; end if;
+    g := #t;
+    // use Newton identities to compute compute elementary symmetric functions from power sums
+    e := [t[1]];  for k:=2 to g do e[k] := ExactQuotient((-1)^(k-1)*t[k]+&+[(-1)^(i-1)*e[k-i]*t[i]:i in [1..k-1]],k); end for;
+    return R!([1] cat [(-1)^i*e[i]:i in [1..g]] cat [(-1)^i*q^i*e[g-i]:i in [1..g-1]] cat [q^g]);
+end intrinsic;
+
+intrinsic PointCountsToLPolynomial (n::SeqEnum[RngIntElt], q::RngIntElt) -> RngUPolElt
+{ Given a sequence of point counts of a genus g curve over Fq,Fq^2,...,Fq^g returns the corresponding L-polynomial. }
+    return TracesToLPolynomial([q^i+1-n[i] : i in [1..#n]], q);
+end intrinsic;
+
+intrinsic LPolynomialToTraces (L::RngUPolElt:d:=0) -> SeqEnum[RngIntElt], RngIntElt
+{ Returns the sequence of Frobenius traces for a genus g curve over Fq,Fq^2,...,Fq^g corresponding to the givien L-polynomial of degree 2g (or just over Fq,..Fq^d if d is specified). }
+    require Degree(L) gt 0 and IsEven(Degree(L)): "Lpolynomial must have positive even degree 2g";
+    g := ExactQuotient(Degree(L),2);
+    b,p,e := IsPrimePower(Integers()!LeadingCoefficient(L));
+    require b: "Not a valid L-polynomial, leading coefficient is not a prime power";
+    require IsDivisibleBy(e,g): "Not a valid L-polynomial, leading coefficient is not a prime power with an integral gth root.";
+    q := p^ExactQuotient(e,g);
+    L := Reverse(L);
+    if d eq 0 then d:=g; end if;
+    e := [Integers()|(-1)^i*Coefficient(L,2*g-i):i in [1..d]];
+    // use Newton identities to compute compute power sums from elementary symmetric functions;
+    t := [e[1]]; for k:=2 to d do t[k] := (-1)^(k-1)*k*e[k] + &+[(-1)^(k-1+i)*e[k-i]*t[i] : i in [1..k-1]]; end for;
+    return t, q;
+end intrinsic;
+
+intrinsic LPolynomialToPointCounts (L::RngUPolElt:d:=0) -> SeqEnum[RngIntElt], RngIntElt
+{ Returns the sequence of point counrs of a genus g curve over Fq,Fq^2,...,Fq^g corresponding to the givien L-polynomial of degree 2g (or just over Fq,..Fq^d if d is specified). }
+    t, q := LPolynomialToTraces(L:d:=d);
+    if d eq 0 then d := #t; end if;
+    return [q^i+1-t[i] : i in [1..d]];
 end intrinsic;
