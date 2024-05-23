@@ -1098,7 +1098,7 @@ intrinsic GL2CommutatorSubgroup(H::GrpMat) -> GrpMat
     if N mod 4 eq 2 then N*:=2; end if;
     A := Factorization(N);
     com := func<H|CommutatorSubgroup(H)>;
-    for a in A do p := a[1]; e := a[2]; while SL2Index(com(GL2Project(H,p^e)):nocheck) gt SL2Index(com(GL2Project(H,p^(e+1))):nocheck) do e +:= 1; N *:= p; end while; end for;
+    for a in A do p := a[1]; e := a[2]; while SL2Index(com(GL2Project(H,p^e)):nocheck) lt SL2Index(com(GL2Project(H,p^(e+1))):nocheck) do e +:= 1; N *:= p; end while; end for;
     if IsOdd(N) then N *:= 2; end if;
     _,K := SL2Level(com(GL2Lift(H,N)));
     return K;
