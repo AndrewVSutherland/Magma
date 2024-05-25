@@ -335,6 +335,14 @@ intrinsic GL2Project(H::GrpMat,M::RngIntElt) -> GrpMat
     return HH;
 end intrinsic;
 
+intrinsic GL2ProjectKernel(H::GrpMat,M::RngIntElt) -> GrpMat
+{ The projection to GL(2,Z/MZ) of the kernel of reduction mod-m of H, where m=N/gcd(M,N); requires m coprime to GCD(M,N). }
+    require not assigned H`SL: "H should be a subgroup of GL2 that is not marked as a subgroup of SL2.";
+    N := #BaseRing(H); if not IsFinite(N) then assert H eq gl2N1; return GL2Ambient(M); end if;
+    d := GCD(M,N); m := N div d; require GCD(m,d) eq 1: "N/gcd(M,N) must be coprime to gcd(M,N)";
+    return m eq 1 select GL2Project(H,M) else (GL2Project(Kernel(pi),M) where _,pi:=ChangeRing(H,Integers(m)));
+end intrinsic;
+
 intrinsic SL2Level(H::GrpMat) -> RngIntElt, GrpMat
 { The least integer N such that H cap SL2 is the full inverse image of its reduction modulo N, along with corresponding subgroup of SL2. }
     if not assigned H`SL then return SL2Level(SL2Intersection(H)); end if;
@@ -572,9 +580,9 @@ intrinsic GL2RelativeIndex(H::GrpMat) -> RngIntElt
     return GL2Index(H) div GL2DeterminantIndex(H);
 end intrinsic;
 
-intrinsic SL2Order(H::GrpMat:nocheck:=false) -> RngIntElt
+intrinsic SL2Order(H::GrpMat) -> RngIntElt
 { The order of the specified subgroup H of SL(2,Z/NZ) (or its intersection with SL(2,Z/NZ)).  This is much faster than #(H meet SL2), even when H is small. }
-    require nocheck or assigned H`SL: "H should be a subgroup of SL2 that is marked as a subgroup of SL2.";
+    if not assigned H`SL then return SL2Order(SL2Intersection(H)); end if;
     if assigned H`Order then return H`Order; end if;
     N := #BaseRing(H); if N le 24 or IsPrime(N) then H`Order := #H; return H`Order; end if;
     gens := Generators(H);
@@ -626,10 +634,11 @@ intrinsic SL2Intersection(H::GrpMat) -> GrpMat
     return K;
 end intrinsic;
 
-intrinsic SL2Index(H::GrpMat:nocheck:=false) -> RngIntElt
+intrinsic SL2Index(H::GrpMat) -> RngIntElt
 { Index of H cap SL(2,Z/NZ) in SL(2,Z/NZ). }
-    require nocheck or assigned H`SL: "H should be a subgroup of SL2 that is marked as a subgroup of SL2.";
-    H`Index := SL2Size(#BaseRing(H)) div SL2Order(H:nocheck:=nocheck);
+    if not assigned H`SL then return SL2Index(SL2Intersection(H)); end if;
+    if assigned H`Index then return H`Index; end if;
+    H`Index := SL2Size(#BaseRing(H)) div SL2Order(H);
     return H`Index;
 end intrinsic;
 
@@ -1095,11 +1104,10 @@ intrinsic GL2CommutatorSubgroup(H::GrpMat) -> GrpMat
     require not assigned H`SL: "H should be a subgroup of GL2 that is not marked as a subgroup of SL2";
     N,H := GL2Level(H);
     if N eq 1 then return K where _,K:=SL2Level(sub<SL(2,Integers(2))|[0,1,1,1]>); end if;
-    if N mod 4 eq 2 then N*:=2; end if;
+    if N mod 4 ne 0 then N *:= 2^(2-Valuation(N,2)); end if;
     A := Factorization(N);
     com := func<H|CommutatorSubgroup(H)>;
-    for a in A do p := a[1]; e := a[2]; while SL2Index(com(GL2Project(H,p^e)):nocheck) lt SL2Index(com(GL2Project(H,p^(e+1))):nocheck) do e +:= 1; N *:= p; end while; end for;
-    if IsOdd(N) then N *:= 2; end if;
+    for a in A do p := a[1]; e := a[2]; while SL2Index(com(GL2ProjectKernel(H,p^e))) lt SL2Index(com(GL2ProjectKernel(H,p^(e+1)))) do e +:= 1; N *:= p; end while; end for;
     _,K := SL2Level(com(GL2Lift(H,N)));
     return K;
 end intrinsic;
