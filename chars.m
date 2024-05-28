@@ -386,9 +386,9 @@ intrinsic ConreyCharacterOrbitRepIndexes(q::RngIntElt:ParityEquals:=0,ConductorD
     return X;
 end intrinsic;
 
-intrinsic ConreyCharacterOrbitReps(q::RngIntElt:parity:=0,ConductorDivides:=0) -> SeqEnum[MonStgElt]
+intrinsic ConreyCharacterOrbitReps(q::RngIntElt:ParityEquals:=0,ConductorDivides:=0) -> SeqEnum[MonStgElt]
 { The list of minimal index Conrey labels of Galois orbit representatives of the full Dirichlet group sorted by order and trace vectors. }
-    return [s cat IntegerToString(n): n in X] where X:=ConreyCharacterOrbitRepIndexes(q:parity:=parity,ConductorDivides:=ConductorDivides) where s:=IntegerToString(q) cat ".";
+    return [s cat IntegerToString(n): n in X] where X:=ConreyCharacterOrbitRepIndexes(q:ParityEquals:=ParityEquals,ConductorDivides:=ConductorDivides) where s:=IntegerToString(q) cat ".";
 end intrinsic;
 
 intrinsic ConreyCharacterOrbitRep (s::MonStgElt) -> MonStgElt
