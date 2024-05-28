@@ -365,9 +365,13 @@ intrinsic IsConjugate(s::MonStgElt,t::MonStgElt) -> BoolElt
     return IsConreyConjugate(s,t);
 end intrinsic;
 
-intrinsic ConreyCharacterOrbitRepIndexes(q::RngIntElt:ParityEquals:=0,ConductorDivides:=0,ConductorBound:=0,DegreeBound:=0,OrderBound:=0) -> SeqEnum[MonStgElt]
+intrinsic ConreyCharacterOrbitRepIndexes(q::RngIntElt:ParityEquals:=0,ConductorDivides:=0,ConductorBound:=0,DegreeBound:=0,OrderBound:=0,PrimitiveOnly:=false) -> SeqEnum[MonStgElt]
 { The list of minimal index Conrey labels of Galois orbit representatives of the full Dirichlet group sorted by order and trace vectors. }
     require q gt 0: "Modulus must be positive.";
+    if PrimitiveOnly then
+        require ConductorBound eq 0 or ConductorBound gt 0: "Invalid ConductorBound when PrimitiveOnly is set";
+        require ConductorDivides eq 0 or ConductorDivides mod q ne 0: "Invalid ConductorDivides when PrimitiveOnly is set";
+    end if;
     if q le 2 then return ParityEquals eq -1 select [] else [1]; end if;
     U,pi := MultiplicativeGroup(Integers(q));
     A := [Integers()|Min([pi(n*x):n in [1..m]|GCD(m,n) eq 1]) where m:=Order(x):x in CyclicGenerators(U)];
@@ -381,14 +385,20 @@ intrinsic ConreyCharacterOrbitRepIndexes(q::RngIntElt:ParityEquals:=0,ConductorD
     if ParityEquals ne 0 then X := [n:n in X|Parity(q,n) eq ParityEquals]; end if;
     if OrderBound ne 0 then X := [n:n in X|Order(q,n) le OrderBound]; end if;
     if DegreeBound ne 0 then X := [n:n in X|Degree(q,n) le DegreeBound]; end if;
+    if PrimitiveOnly then X := [n:n in X|Conductor(q,n) eq q]; return X; end if;
     if ConductorBound ne 0 then X := [n:n in X|Conductor(q,n) le ConductorBound]; end if;
     if ConductorDivides ne 0 then X := [n:n in X|ConductorDivides mod Conductor(q,n) eq 0]; end if;
     return X;
 end intrinsic;
 
-intrinsic ConreyCharacterOrbitReps(q::RngIntElt:ParityEquals:=0,ConductorDivides:=0) -> SeqEnum[MonStgElt]
+intrinsic ConreyCharacterOrbitReps(q::RngIntElt:ParityEquals:=0,ConductorDivides:=0,ConductorBound:=0,DegreeBound:=0,OrderBound:=0,PrimitiveOnly:=false) -> SeqEnum[MonStgElt]
 { The list of minimal index Conrey labels of Galois orbit representatives of the full Dirichlet group sorted by order and trace vectors. }
-    return [s cat IntegerToString(n): n in X] where X:=ConreyCharacterOrbitRepIndexes(q:ParityEquals:=ParityEquals,ConductorDivides:=ConductorDivides) where s:=IntegerToString(q) cat ".";
+    return [s cat IntegerToString(n): n in X] where X:=ConreyCharacterOrbitRepIndexes(q:ParityEquals:=ParityEquals,
+                                                                                        ConductorDivides:=ConductorDivides,
+                                                                                        ConductorBound:=ConductorBound,
+                                                                                        DegreeBound:=DegreeBound,
+                                                                                        OrderBound:=OrderBound,
+                                                                                        PrimitiveOnly:=PrimitiveOnly) where s:=IntegerToString(q) cat ".";
 end intrinsic;
 
 intrinsic ConreyCharacterOrbitRep (s::MonStgElt) -> MonStgElt
@@ -840,8 +850,17 @@ end intrinsic;
 intrinsic Parity (q::RngIntElt, n::RngIntElt) -> RngIntElt
 { The parity of the Conrey character q.n. }
     require q gt 0 and n gt 0 and GCD(q,n) eq 1: "Conrey characters must be specified by a pair of coprime positive integers q,n.";
-    Q := PrimeDivisors(q);
-    return &*[Integers()|IsSquare(Integers(p)!n) select 1 else -1 : p in Q] * (IsDivisibleBy(q,4) select (n mod 4 eq 1 select 1 else -1) else 1);
+    return &*[Integers()|KroneckerSymbol(n,p):p in PrimeDivisors(q)|IsOdd(p)]*(q mod 4 ne 0 or n mod 4 eq 1 select 1 else -1);
+end intrinsic;
+
+intrinsic IsEven (q::RngIntElt, n::RngIntElt) -> RngIntElt
+{ The parity of the Conrey character q.n. }
+    return Parity(q,n) eq 1;
+end intrinsic;
+
+intrinsic IsOff (q::RngIntElt, n::RngIntElt) -> RngIntElt
+{ The parity of the Conrey character q.n. }
+    return Parity(q,n) eq -1;
 end intrinsic;
 
 intrinsic Parity (s::MonStgElt) -> RngIntElt
@@ -853,8 +872,7 @@ end intrinsic;
 intrinsic Conductor (q::RngIntElt, n::RngIntElt) -> RngIntElt
 { The conductor of the Conrey character q.n. }
     require q gt 0 and n gt 0 and GCD(q,n) eq 1: "Conrey characters must be specified by a pair of coprime positive integers q,n.";
-    c := &*[Integers()|n mod pp eq 1 select 1 else p^(Valuation(Order(Integers(pp)!n),p)+1) where pp:=p^qq[2] where p:=qq[1]:qq in Factorization(q)];
-    return c * (e gt 2 and ConreyCharacterValue(2^e,n,5) ne 1 select 2 else 1) where e:=Valuation(q,2);
+    return &*[Integers()|n mod pp eq 1 select 1 else p^(Valuation(Order(Integers(pp)!n),p)+(IsOdd(p) or n mod pp eq pp-1 select 1 else 2)) where pp:=p^qq[2] where p:=qq[1]:qq in Factorization(q)];
 end intrinsic;
 
 intrinsic Conductor (s::MonStgElt) -> RngIntElt
