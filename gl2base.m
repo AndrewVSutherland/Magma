@@ -222,7 +222,7 @@ intrinsic GL1Project(H::GrpMat,M::RngIntElt) -> GrpMat
     N := #BaseRing(H); if not IsFinite(N) then assert H eq gl1N1; return GL1Ambient(M); end if;
     if M eq 1 then return gl1N1; elif N eq M then return H; end if;
     if not IsDivisibleBy(N,M) then N := LCM(M,N); H := GL1Lift(H,N); if N eq M then return H; end if; end if;
-    return assigned H`Level and IsDivisibleBy(M,H`Level) select gl1copyattr(ChangeRing(Integers(M))) else ChangeRing(H,Integers(M));
+    return assigned H`Level and IsDivisibleBy(M,H`Level) select gl1copyattr(ChangeRing(H,Integers(M))) else ChangeRing(H,Integers(M));
 end intrinsic;
 
 // Do not change this function
@@ -329,7 +329,7 @@ intrinsic GL2Project(H::GrpMat,M::RngIntElt) -> GrpMat
     N := #BaseRing(H); if not IsFinite(N) then assert H eq gl2N1; return GL2Ambient(M); end if;
     if M eq 1 then return gl2N1; elif N eq M then return H; end if;
     if not IsDivisibleBy(N,M) then N := LCM(M,N); H := GL2Lift(H,N); if N eq M then return H; end if; end if;
-    if assigned H`Level and IsDivisibleBy(M,H`Level) then return gl2copyattr(ChangeRing(Integers(M))); end if;
+    if assigned H`Level and IsDivisibleBy(M,H`Level) then return gl2copyattr(ChangeRing(H,Integers(M))); end if;
     HH := ChangeRing(H,Integers(M));
     if M le 2 or (assigned H`NegOne and H`NegOne) then HH`NegOne := true; end if;
     return HH;
@@ -411,9 +411,9 @@ intrinsic SL2Project(H::GrpMat,M::RngIntElt) -> GrpMat
     N := #BaseRing(H); if not IsFinite(N) then assert H eq sl2N1; return SL2Ambient(M); end if;
     if M eq 1 then return sl2N1; elif N eq M then return H; end if;
     if not IsDivisibleBy(N,M) then N := LCM(M,N); H := SL2Lift(H,N); if N eq M then return H; end if; end if;
-    if assigned H`Level and IsDivisibleBy(M,H`Level) then return sl2copyattr(ChangeRing(Integers(M))); end if;
+    if assigned H`Level and IsDivisibleBy(M,H`Level) then return sl2copyattr(ChangeRing(H,Integers(M))); end if;
     HH := ChangeRing(H,Integers(M)); HH`SL := true;
-    if M le 2 or (assigned H`negone and H`negone) then HH`NegOne := true; end if;
+    if M le 2 or (assigned H`NegOne and H`NegOne) then HH`NegOne := true; end if;
     return HH;
 end intrinsic;
 
