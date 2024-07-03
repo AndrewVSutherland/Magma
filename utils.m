@@ -543,16 +543,22 @@ intrinsic GetFilenames(I::Intrinsic) -> SeqEnum
     res := [];
     def := "Defined in file: ";
     for i->line in lines do
-        if line[1] eq "(" and Position(line, "->") ne 0 then
-            s := Split(StripWhiteSpace(line), "->");
-            assert #s eq 2;
-            arguments := [Split(elt, ":")[2] : elt in Split(&cat Split(s[1], "()"))];
-            values := Split(s[2], ",");
-            if i gt 1 and lines[i-1][1..#def] eq def then
+        p := Position(line, ")");
+        if line[1] eq "(" and p ne 0 then
+            // figure out filename
+            if i gt 1 and #lines[i-1] ge #def and lines[i-1][1..#def] eq def then
                 comma := Position(lines[i-1], ",");
                 filename := lines[i-1][#def + 1..comma-1];
             else
                 filename := "";
+            end if;
+            arguments := [Split(elt, ":")[2] : elt in Split(StripWhiteSpace(line[2..p-1]), ",")];
+            s := Split(StripWhiteSpace(line), "->");
+            if #s eq 1 then
+                values := [];
+            else
+                assert #s eq 2;
+                values := Split(StripWhiteSpace(s[2]), ",");
             end if;
             Append(~res, <filename, arguments, values>);
         end if;
@@ -568,7 +574,7 @@ intrinsic WriteStderr(s::MonStgElt)
 end intrinsic;
 
 intrinsic WriteStderr(e::Err)
-{ write to stderr }
+{ " } //"
   WriteStderr(Sprint(e) cat "\n");
 end intrinsic;
 
