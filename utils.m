@@ -574,8 +574,128 @@ intrinsic WriteStderr(s::MonStgElt)
 end intrinsic;
 
 intrinsic WriteStderr(e::Err)
-{ " } //"
+{ write to stderr }
   WriteStderr(Sprint(e) cat "\n");
+end intrinsic;
+
+function CanonicalizeRationalInvariants (v,w)
+    assert #v eq #w;
+    I := [i:i in [1..#v]|v[i] ne 0];
+    if #I eq 0 then return v; end if;
+    d := LCM([Denominator(a):a in v]);
+    for p in PrimeDivisors(d) do
+        n := Max([Ceiling(Valuation(Denominator(v[i]),p)/w[i]):i in I]);
+        if n gt 0 then v := [p^(n*w[i])*v[i]:i in [1..#v]]; end if;
+    end for;
+    v := [Integers()!a:a in v];
+    O := [i:i in I|IsOdd(w[i])];
+    if #O gt 0 and v[O[1]] lt 0 then v := [(-1)^w[i]*v[i]:i in [1..#v]]; end if;
+    d := GCD(v);
+    for p in PrimeDivisors(d) do
+        n := Min([Floor(Valuation(v[i],p)/w[i]):i in I]);
+        if n gt 0 then v := [ExactQuotient(v[i],p^(n*w[i])):i in [1..#v]]; end if;
+    end for;
+    return v;
+end function;
+
+intrinsic NormalizedDixmierOhnoInvariants (f::RngMPolElt) -> SeqEnum
+{ Normalized Dixmier-Ohno invaraints of smooth plane quartic f(x,y,z)=0 defined over Q. }
+    require VariableWeights(Parent(f)) eq [1,1,1] and IsHomogeneous(f) and Degree(f) eq 4: "Input muste be a ternary quartic form.";
+    R := BaseRing(Parent(f));
+    require Type(R) eq FldRat or Type(R) eq RngInt: "Curve must be defined over Q.";
+    inv, w := DixmierOhnoInvariants(f:normalize);
+    return CanonicalizeRationalInvariants(inv,w);
+end intrinsic;
+
+intrinsic NormalizedShiodaInvariants (C::CrvHyp) -> SeqEnum
+{ Normalized Shioda invariants of genus 3 hyperelliptic curve (the invariants must lie in Q, but the curve need not be defined over Q). }
+    require Genus(C) eq 3: "Genus 3 curve required.";
+    inv, w := ShiodaInvariants(C);
+    inv := WPSNormalize(w,inv);
+    require &and[c in Rationals():c in inv]: "The Shioda invariants must lie in Q.";
+    return CanonicalizeRationalInvariants([Rationals()!c:c in inv],w);
+end intrinsic;
+
+intrinsic NormalizedShiodaInvariants (f::RngUPolElt,h::RngUPolElt) -> SeqEnum
+{ Normalized Shioda invariants of genus 3 hyperelliptic curve (the invariants must lie in Q, but the curve need not be defined over Q). }
+    C := HyperellipticCurve(f,h);
+    return NormalizedShiodaInvariants(C);
+end intrinsic;
+
+intrinsic SPQInvariants (f::RngMPolElt) -> SeqEnum
+{ Normalized Dixmier-Ohno invaraints of smooth plane quartic f(x,y,z)=0 defined over Q. }
+    return NormalizedDixmierOhnoInvariants(f);
+end intrinsic;
+
+intrinsic SPQInvariants (f::MonStgElt) -> SeqEnum
+{ Normalized Dixmier-Ohno invaraints of smooth plane quartic f(x,y,z)=0 defined over Q. }
+  R<x,y,z>:=PolynomialRing(Rationals(),3);
+  return SPQInvariants(eval(f));
+end intrinsic;
+
+intrinsic SPQIsIsomorphic(f1::RngMPolElt, f2::RngMPolElt) -> BoolElt, GrpMatElt
+{ Tests isomorphism of smooth plane curves f(x,y,z)=0 by computing a matrix M in GL(3,F) such that f1^M is a scalar multiple of f2. }
+    require VariableWeights(Parent(f1)) eq [1,1,1]: "Inputs must be trivariate polynomials.";
+    require IsHomogeneous(f1) and Degree(f1) eq 4 and IsHomogeneous(f2) and Degree(f2) eq 4: "Input polynomials must be ternary quartic forms.";
+    R := Parent(f1);
+    if not IsField(BaseRing(R)) then R:=PolynomialRing(FieldOfFractions(BaseRing(R)),3); f1:=R!f1; f2:=R!f2; end if;
+    f2 := R!f2; // make sure both f1 and f2 live in the same structure
+    F := BaseRing(R);
+    /*
+     We need to determine whether there exists an invertible matrix M such that f1^M is a scalar multiple of f2.
+     The matrix is determined only up to scaling; to reduce to a finite set, we set one of the entries equal to 1.
+     This leads to three different cases, depending on which entry in the first row of M is the first nonzero entry.
+    */
+
+    // We begin with the most overdetermined case, with first row (0 0 1).
+    A<[a]> := AffineSpace(F, 7);
+    mat := Matrix(CoordinateRing(A), 3,3, [0,0,1] cat a[1..6]);
+    PA := PolynomialRing(CoordinateRing(A), 3);
+    fPA := PA!f1;
+    f1PA := PA!f2;
+    f2PA := fPA^mat;
+    mons := MonomialsOfDegree(PA, 4);
+    tworows := Matrix([[MonomialCoefficient(f1PA, m) : m in mons],
+                     [MonomialCoefficient(f2PA, m) : m in mons]]);
+    S := Scheme(A, Minors(tworows, 2) cat [Determinant(mat)*a[7]-1]);
+    pts := Points(S);
+    if not IsEmpty(pts) then
+        M := GL(3,F)!Matrix(F, 3,3, [0,0,1] cat Eltseq(pts[1])[1..6]);
+    else
+        // Now we look at first row (0 1 *).
+        A<[a]> := AffineSpace(F, 8);
+        mat := Matrix(CoordinateRing(A), 3,3, [0,1] cat a[1..7]);
+        PA := PolynomialRing(CoordinateRing(A), 3);
+        fPA := PA!f1;
+        f1PA := PA!f2;
+        f2PA := fPA^mat;
+        mons := MonomialsOfDegree(PA, 4);
+        tworows := Matrix([[MonomialCoefficient(f1PA, m) : m in mons],
+                           [MonomialCoefficient(f2PA, m) : m in mons]]);
+        S := Scheme(A, Minors(tworows, 2) cat [Determinant(mat)*a[8]-1]);
+        pts := Points(S);
+        if not IsEmpty(pts) then
+            M := GL(3,F)!Matrix(F, 3,3, [0,1] cat Eltseq(pts[1])[1..7]);
+        else
+            // Finally, the generic case, first row is (1 * *)
+            A<[a]> := AffineSpace(F, 9);
+            mat := Matrix(CoordinateRing(A), 3,3, [1] cat a[1..8]);
+            PA := PolynomialRing(CoordinateRing(A), 3);
+            fPA := PA!f1;
+            f1PA := PA!f2;
+            f2PA := fPA^mat;
+            mons := MonomialsOfDegree(PA, 4);
+            tworows := Matrix([[MonomialCoefficient(f1PA, m) : m in mons],
+                             [MonomialCoefficient(f2PA, m) : m in mons]]);
+            S := Scheme(A, Minors(tworows, 2) cat [Determinant(mat)*a[9]-1]);
+            pts := Points(S);
+            if IsEmpty(pts) then return false,_; end if;
+            M := GL(3,F)!Matrix(F, 3,3, [1] cat Eltseq(pts[1])[1..8]);
+        end if;
+    end if;
+    f := f1^M;
+    assert LeadingCoefficient(f2)*f eq LeadingCoefficient(f)*f2;
+    return true, M;
 end intrinsic;
 
 intrinsic MonicQuadraticRoots(b::RngIntElt, c::RngIntElt, p::RngIntElt, e:RngIntElt) -> SeqEnum[RngIntElt]
