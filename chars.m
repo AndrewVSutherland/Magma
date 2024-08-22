@@ -292,17 +292,34 @@ intrinsic CharacterOrbitReps (N::RngIntElt:RepTable:=false,OrderBound:=0) -> Lis
 { The list of Galois orbit representatives of the full Dirichlet group of modulus N with minimal codomains sorted by order and trace vectors.
   If the optional boolean argument RepTable is set then a table mapping Dirichlet characters to indexes in this list is returned as the second return value. }
     require N gt 0: "Modulus N must be a positive integer";
-    if OrderBound eq 1 then chi1:=DirichletGroup(N)!1; if RepTable then T:=AssociativeArray(Parent(chi1)); T[chi1]:=1; return [chi1],T; else return [chi1]; end if; end if;
-    if not RepTable and OrderBound eq 0 and IsCyclic(N) then return [* DirichletCharacter(s):s in ConreyCharacterOrbitReps(N) *]; end if;
-    // The call to MinimalBaseRingCharacter can be very slow when N is large (this makes no sense it should be easy) */
-    G := [* MinimalBaseRingCharacter(chi): chi in GaloisConjugacyRepresentatives(FullDirichletGroup(N)) *];
+    if OrderBound eq 1 then
+      chi1:=DirichletGroup(N)!1;
+      if RepTable then
+        T:=AssociativeArray(Parent(chi1));
+        T[chi1]:=1;
+        return [chi1],T;
+      else
+        return [chi1];
+      end if;
+    end if;
+    if not RepTable and OrderBound eq 0 then
+      return [* DirichletCharacter(s) : s in ConreyCharacterOrbitReps(N) *];
+    end if;
+    G := [* DirichletCharacter(s) : s in ConreyCharacterOrbitReps(N) *];
     X := [i:i in [1..#G]];
     X := Sort(X,func<i,j|CompareCharacters(G[i],G[j])>);
     G := OrderBound eq 0 select [* G[i] : i in X *] else [* G[i] : i in X | Order(G[i]) le OrderBound *];
     if not RepTable then return G; end if;
     H := Elements(FullDirichletGroup(N));
     A := AssociativeArray();
-    for i:=1 to #G do v:=[OrderOfRootOfUnity(a,Order(G[i])):a in ValuesOnUnitGenerators(G[i])]; if IsDefined(A,v) then Append(~A[v],i); else A[v]:=[i]; end if; end for;
+    for i:=1 to #G do
+      v:=[OrderOfRootOfUnity(a,Order(G[i])):a in ValuesOnUnitGenerators(G[i])];
+      if IsDefined(A,v) then
+       Append(~A[v],i);
+      else
+        A[v]:=[i];
+      end if;
+    end for;
     if OrderBound gt 0 then H := [chi : chi in H | Order(chi) le OrderBound]; end if;
     T := AssociativeArray(Parent(H[1]));
     for h in H do
@@ -853,12 +870,12 @@ intrinsic Parity (q::RngIntElt, n::RngIntElt) -> RngIntElt
     return &*[Integers()|KroneckerSymbol(n,p):p in PrimeDivisors(q)|IsOdd(p)]*(q mod 4 ne 0 or n mod 4 eq 1 select 1 else -1);
 end intrinsic;
 
-intrinsic IsEven (q::RngIntElt, n::RngIntElt) -> RngIntElt
+intrinsic IsEven (q::RngIntElt, n::RngIntElt) -> BoolElt
 { The parity of the Conrey character q.n. }
     return Parity(q,n) eq 1;
 end intrinsic;
 
-intrinsic IsOff (q::RngIntElt, n::RngIntElt) -> RngIntElt
+intrinsic IsOdd (q::RngIntElt, n::RngIntElt) -> BoolElt
 { The parity of the Conrey character q.n. }
     return Parity(q,n) eq -1;
 end intrinsic;
@@ -1110,8 +1127,12 @@ intrinsic DirichletCharacterFromAngles (N::RngIntElt,u::SeqEnum[RngIntElt],v::Se
     return DirichletCharacterFromValuesOnUnitGenerators(DirichletGroup(N,F),[F|F.1^(Integers()!(n*e)) : e in V]);
 end intrinsic;
 
-intrinsic DirichletCharacterFromAngles (N::RngIntElt,v::SeqEnum) -> GrpDrchElt
-{ Given a modulus N, a positive integer n, a list of integers u giving standard generates for (Z/NZ)*, and a suitable list of integers v, returns the Dirichlet character with values in Q(zeta_n) mapping u[i] to zeta_n^v[i]. }
+intrinsic DirichletCharacterFromAngles (N::RngIntElt,v::SeqEnum: zeta:=0, r:=0) -> GrpDrchElt
+{ Given a modulus N, a positive integer n, a list of integers u giving standard generates for (Z/NZ)*, and a suitable list of integers v, returns the Dirichlet character with values in Q(zeta_n) mapping u[i] to zeta_n^v[i]. If the optional parameter zeta is given, then it is assumed to be a root of unity of order r with r a multiple of n and zeta^(r/n) is used instead of zeta_n.}
+    if zeta ne 0 then
+        R := Parent(zeta);
+        return DirichletCharacterFromAngles (N, v, R, zeta, r);
+    end if;
     require N gt 0: "Modulus N must a positive integer";
     if N lt 3 then assert #v eq 0; return DirichletGroup(N)!1; end if;
     n := LCM([Denominator(e):e in v]);
@@ -1120,6 +1141,19 @@ intrinsic DirichletCharacterFromAngles (N::RngIntElt,v::SeqEnum) -> GrpDrchElt
     F := CyclotomicField(n);
     return DirichletCharacterFromValuesOnUnitGenerators(DirichletGroup(N,F),[F|F.1^(Integers()!(n*e)) : e in v]);
 end intrinsic;
+
+intrinsic DirichletCharacterFromAngles (N::RngIntElt,v::SeqEnum, R::Rng, zeta::RngElt, r::RngIntElt) -> GrpDrchElt
+{ Given a modulus N, a positive integer n, a list of integers u giving standard generates for (Z/NZ)*, and a suitable list of integers v, returns the Dirichlet character with values in R mapping u[i] to zeta^(r/n*v[i]). If agrument zeta is assumed to be a root of unity of order r  in R. And r should be a multiple of n.}
+    require N gt 0: "Modulus N must a positive integer";
+    if N lt 3 then assert #v eq 0; return DirichletGroup(N, R, zeta^r, 1)!1; end if;
+    n := LCM([Denominator(e):e in v]);
+    assert (r mod n) eq 0;
+    zeta := zeta^(r div n);
+    if n eq 1 then return DirichletGroup(N, R, zeta, n)!1; end if;
+    if n eq 2 then return DirichletCharacterFromValuesOnUnitGenerators(DirichletGroup(N, R, zeta, n),[(-1)^(Integers()!(n*e)) : e in v]); end if;
+    return DirichletCharacterFromValuesOnUnitGenerators(DirichletGroup(N,R, zeta, n),[R|zeta^(Integers()!(n*e)) : e in v]);
+end intrinsic;
+
 
 intrinsic SquareRoots (chi::GrpDrchElt) -> SeqEnum[GrpDrchElt]
 { A list of the Dirichlet characters psi in the ambient group of chi for which psi^2 = chi (note that only psi in the ambient group of chi will be returned). }
@@ -1137,14 +1171,21 @@ intrinsic SquareRoots (chi::GrpDrchElt) -> SeqEnum[GrpDrchElt]
     return [Parent(chi)|psi*xi : xi in Elements(DirichletGroup(Modulus(chi)))];
 end intrinsic;
 
-intrinsic CyclotomicConreyCharacter (q::RngIntElt,n::RngIntElt) -> GrpDrchElt
-{ The Dirichlet character with Conrey label q.n. }
-    return DirichletCharacterFromAngles(q,UnitGenerators(q),ConreyCharacterAngles(q,n));
+intrinsic CyclotomicConreyCharacter (q::RngIntElt,n::RngIntElt : zeta:=0, r:=0) -> GrpDrchElt
+{ The Dirichlet character with Conrey label q.n.
+  Optionally one can pass in a root of unity using the parameter zeta. This zeta will be used to construct
+  the dirichlet character, if zeta is nonzero then r should be nonzero as well and it is assumed to be the
+  order of zeta.
+}
+    return DirichletCharacterFromAngles(q, ConreyCharacterAngles(q,n) : zeta:=zeta, r:=r);
 end intrinsic;
 
-intrinsic CyclotomicConreyCharacter (s::MonStgElt) -> GrpDrchElt
-{ The Dirichlet character with the specified Conrey label or character orbit label. }
-    return CyclotomicConreyCharacter (a[1],a[2]) where a := SplitCharacterLabel(s);
+intrinsic CyclotomicConreyCharacter (s::MonStgElt : zeta:=0, r:=0) -> GrpDrchElt
+{ The Dirichlet character with the specified Conrey label or character orbit label.
+  Optionally one can pass in a root of unity using the parameter zeta. This zeta will be used to construct
+  the dirichlet character, if zeta is nonzero then r should be nonzero as well and it is assumed to be the
+  order of zeta.}
+    return CyclotomicConreyCharacter (a[1],a[2] : zeta:=zeta, r:=r) where a := SplitCharacterLabel(s);
 end intrinsic;
 
 intrinsic DirichletCharacter (chi:GrpDrchElt) -> GrpDrchElt
@@ -1154,12 +1195,15 @@ end intrinsic;
 
 intrinsic DirichletCharacter (q::RngIntElt,n::RngIntElt) -> GrpDrchElt
 { The Dirichlet character with Conrey label q.n, equivalent to CyclotomicConreyCharacter(q,n). }
-    return DirichletCharacterFromAngles(q,UnitGenerators(q),ConreyCharacterAngles(q,n));
+    return DirichletCharacterFromAngles(q, ConreyCharacterAngles(q,n));
 end intrinsic;
 
-intrinsic DirichletCharacter (s::MonStgElt) -> GrpDrchElt
-{ Returns the Dirichlet character with the specified Conrey label or character orbit label. }
-    return CyclotomicConreyCharacter(a[1],a[2]) where a := SplitCharacterLabel(s);
+intrinsic DirichletCharacter (s::MonStgElt : zeta:=0, r:=0) -> GrpDrchElt
+{ Returns the Dirichlet character with the specified Conrey label or character orbit label.
+  Optionally one can pass in a root of unity using the parameter zeta. This zeta will be used to construct
+  the dirichlet character, if zeta is nonzero then r should be nonzero as well and it is assumed to be the
+  order of zeta.}
+    return CyclotomicConreyCharacter(a[1],a[2]: zeta:=zeta, r:=r) where a := SplitCharacterLabel(s);
 end intrinsic;
 
 intrinsic Conjugates (chi::GrpDrchElt) -> SeqEnum[GrpDrchElt]
