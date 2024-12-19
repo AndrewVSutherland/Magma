@@ -1,4 +1,10 @@
-freeze;
+/*
+    General purpose utilities (often things I wished Magma supported directly) and aliases/wrappers for Magma functions to make them easer for me to use and/or remember.
+
+    Copyright (c) Andrew V. Sutherland, 2019-2024.  See License file for details on copying and usage.
+*/
+
+declare verbose ParallelJobs, 1;
 
 intrinsic ProfileTimes(:All:=false) -> SeqEnum
 { Lists vertices in profile graph in order of time.  You need to SetProfile(true), run something, then call this (which will SetProfile(false) before dumping). }
@@ -28,7 +34,7 @@ intrinsic Eltseq(s::SetMulti[RngIntElt]) -> SeqEnum
 end intrinsic;
 
 intrinsic ReplaceCharacter(s::MonStgElt,c::MonStgElt,d::MonStgElt) -> MonStgElt
-{ Efficiently replace every occurrence of the character c in s with the string d (c must be a single character but d need not be). }
+{ Efficiently replace every occurrence of the character c in s with the string d (c must be a single character but d need not be). This should be used as an alternative to SubstituteString, which scales non-linearly. }
     require #c eq 1: "The second parameter must be a single character (string of length 1).";
     t := Split(s,c:IncludeEmpty);
     if s[#s] eq c then Append(~t,""); end if; // add empty string at the end which Split omits
@@ -36,7 +42,7 @@ intrinsic ReplaceCharacter(s::MonStgElt,c::MonStgElt,d::MonStgElt) -> MonStgElt
 end intrinsic;
 
 intrinsic ReplaceString(s::MonStgElt,c::MonStgElt,d::MonStgElt) -> MonStgElt
-{ Greedily replace each occurrence of string c in s with the string d. }
+{ Greedily replace each occurrence of string c in s with the string d. This is a completely naive unoptimized implementation, but it still outperforms SubstituteString for large strings. }
     require #c ge 1: "The string to be replaced cannot be empty.";
     m := #c;
     t := "";
@@ -94,6 +100,16 @@ intrinsic putrecs(filename::MonStgElt,S::SeqEnum[SeqEnum[MonStgElt]]:Delimiter:=
     Flush(fp);
 end intrinsic;
 
+intrinsic maxcerts (S::SetEnum, Ts::SeqEnum[SetEnum]:Limit:=3) -> SeqEnum[SetEnum]
+{ Given a set S and a list of subsets T of S, returns a list of minimal subsets of S of cardinality at most Limit that are not contained in any of the T. This can be viewed as the floor of the lattice of subsets of S that not contained in any T. }
+    X := &join[S diff T : T in Ts];
+    A := [];
+    for i:=1 to Limit do
+        A cat:= [s:s in Subsets(X,i) | &and[not t subset s: t in A] and &and[not s subset T : T in Ts]];
+    end for;
+    return A;
+end intrinsic;
+
 intrinsic StringToStrings (s::MonStgElt) -> SeqEnum[MonStgElt]
 { Given a string encoding a list of strings that do not contain commas or whitespace, e.g. "[cat,dog]", returns a list of the strings, e.g [ "cat", "dog" ]. }
     s := StripWhiteSpace(s);
@@ -115,7 +131,7 @@ intrinsic sum(X::[]) -> .
 end intrinsic;
 
 intrinsic sum(v::ModTupRngElt) -> .
-{ Sum of a vector. }
+{ Sum over a vector. }
     return  sum(Eltseq(v));
 end intrinsic;
 
@@ -357,7 +373,10 @@ intrinsic ConjugateCompositum(G::Grp, H1::Grp, H2::Grp) -> Grp
     return S[Min(I)[2]];
 end intrinsic;
 
-getval := func<X,k| b select v else [] where b,v := IsDefined(X,k)>;
+intrinsic getval(X::Any,k::Any:missing:=[]) -> Any
+{ Returns X[k] if it is defined and [] (or whatever the optional argument missing is set to) otherwise (analog of the get method in Python). }
+    return b select v else missing where b,v := IsDefined(X,k);
+end intrinsic;
 
 intrinsic IndexFibers (S::SeqEnum, f::UserProgram : Unique:=false, Project:=false) -> Assoc
 { Given a list of objects S and a function f on S creates an associative array satisfying A[f(s)] = [t:t in S|f(t) eq f(s)]. }
@@ -507,11 +526,23 @@ intrinsic KroneckerClassNumber(D::RngIntElt) -> RngIntElt
     return &+[ClassNumber(d^2*D0): d in Divisors(f)];
 end intrinsic;
 
+intrinsic split(f::RngUPolElt, p::RngIntElt) -> SetMulti
+{ The multiset of pairs <d,e> where d is the residue field degree and e is the ramification index of the primes above p in the number field defined by the monic irreducible polynomial f. }
+    require IsMonic(f) and IsIrreducible(f): "The polynomial f must be irreducible.";
+    require IsPrime(p): "p must be a rational prime.";
+    s := Pipe(Sprintf("sage -c \"load('/home/drew/Dropbox/magma/split.py'); print(split(%o,%o))\"",Coefficients(f),p),"");
+    try
+        s := eval(s);
+        return {* <a[1],a[2]>: a in s *};
+    catch e
+        error "Call to Sage failed with return value: " cat s;
+    end try;
+end intrinsic;
+
 function plog(p,e,a,b) // returns nonnegative integer x such that a^x = b or -1, assuming a has order p^e
     if e eq 0 then return a eq 1 and b eq 1 select 0 else -1; end if;
     if p^e le 256 then return Index([a^n:n in [0..p^e-1]],b)-1; end if;
-    if e eq 1 then
-        // BSGS base case
+    if e eq 1 then // use BSGS for groups of prime order, this is the base case of the recursion
         aa := Parent(a)!1;
         r := Floor(Sqrt(p)); s := Ceiling(p/r);
         babys := AssociativeArray(); for x:=0 to r-1 do babys[aa] := x; aa *:= a; end for;
@@ -522,29 +553,118 @@ function plog(p,e,a,b) // returns nonnegative integer x such that a^x = b or -1,
     e1 := e div 2; e0 := e-e1;
     x0 := $$(p,e0,a^(p^e1),b^(p^e1)); if x0 lt 0 then return -1; end if;
     x1 := $$(p,e1,a^(p^e0),b*a^(-x0)); if x1 lt 0 then return -1; end if;
-    return (x0 + p^e0*x1);
-end function;
-
-function qlog(p,e,m,a,b) // computes discrete log of b wrt a in Z/p^eZ given the order m of a
-    R := Integers(p^e); a := R!a; b := R!b;
-    if p eq 2 then return plog(2,Valuation(m,2),a,b); end if;
-    me := Valuation(m,p);  m1 := p^me; m2 := GCD(m,p-1);
-    x1 := plog(p,me,a^m2,b^m2); if x1 lt 0 then return x1; end if;
-    x2 := Log(GF(p)!(a^m1),GF(p)!(b^m1)); if x2 lt 0 then return x2; end if;
-    return CRT([x1,x2],[m1,m2]);
+    return x0 + p^e0*x1;
 end function;
 
 intrinsic Log (a::RngIntResElt, b::RngIntResElt) -> RngIntElt
-{ Given a,b in (Z/nZ)* returns least nonnegative x such that a^x = b or -1 if no such x exists. }
+{ Given a,b in (Z/nZ)*, returns least nonnegative x such that a^x = b or -1 if no such x exists. }
     R := Parent(a); n := #R;
     require Parent(b) eq R: "Arguments must be elements of the same ring Z/nZ";
     m := Order(a); if m le 5000 then return Index([a^n:n in [0..m-1]],b)-1; end if;
     P := Factorization(n);
     M := [Order(Integers(p[1]^p[2])!a) : p in P];
+    function qlog(p,e,m,a,b) // computes discrete log of b wrt a in Z/p^eZ given the order m of a
+        R := Integers(p^e); a := R!a; b := R!b;
+        if p eq 2 then return plog(2,Valuation(m,2),a,b); end if;
+        me := Valuation(m,p);  m1 := p^me; m2 := GCD(m,p-1);
+        x1 := plog(p,me,a^m2,b^m2); if x1 lt 0 then return x1; end if;
+        x2 := Log(GF(p)!(a^m1),GF(p)!(b^m1)); if x2 lt 0 then return x2; end if;
+        return CRT([x1,x2],[m1,m2]);
+    end function;
     L := [qlog(P[i][1],P[i][2],M[i],a,b) : i in [1..#P]];
     if -1 in L then return -1; end if;
     return CRT(L,M);
+end intrinsic; 
+
+intrinsic MinimalContractions(p::SetMulti[RngIntElt]) -> SetEnum[SetMulti[RngIntElt]]
+{ Given a multiset p of integers representing a partititon of n with k blocks, returns the set of partitions of n with k-1 blocks of which p is a refinement. }
+    if #p le 1 then return {Parent(p)|}; end if;
+    return {Include(Exclude(Exclude(p,a),b),a+b):a,b in Set(p)|a ne b or Multiplicity(p,a) gt 1};
 end intrinsic;
+
+intrinsic Contractions(p::SetMulti[RngIntElt],k::RngIntElt) ->  SetEnum[SetMulti[RngIntElt]]
+{ Given a multiset p of integers representing a partititon of n, returns the set of partitions of n with k blocks of which p is a refinement. }
+    if #p lt k then return {}; end if;
+    if #p eq k then return {p}; end if;
+    P := {p};
+    for i:=k+1 to #p do P := &join[MinimalContractions(p):p in P]; end for;
+    return P;
+end intrinsic;
+
+intrinsic Contractions(p::SetMulti[RngIntElt]) ->  SetEnum[SetMulti[RngIntElt]]
+{ Given a multiset p of integers representing a partititon of n, returns the set of partitions of n of which p is a refinement. }
+    P := {p}; Q := P;
+    for i:=1 to #p-1 do Q := &join[MinimalContractions(p):p in Q]; P join:= Q; end for;
+    return P;
+end intrinsic;
+
+intrinsic CommonContractions(S::SeqEnum[SetMulti[RngIntElt]]) -> SetEnum[SetMulti[RngIntElt]]
+{ Given a sequence of multisets p of integers representing a partititon of n, returns the set of partitions of n that are refined by every element of S. }
+    require #{&+p:p in S} eq 1: "Incompatible partitions.";
+    return &meet[Contractions(p):p in S];
+end intrinsic;
+
+intrinsic MinimalCommonContractions(S::SeqEnum[SetMulti[RngIntElt]]) -> SetEnum[SetMulti[RngIntElt]]
+{ Given a sequence of multisets of integers representing partitions of some integer n, returns the set T of partitions of n with k blocks that are refined by every member of S with k maximized subject to ensuring T is non-empty.  Note that there may be partitions with less than k blocks that are refined by every element of S but not by any element of T. }
+    if #S eq 1 then return Set(S); end if;
+    require #{&+p:p in S} eq 1: "Incompatible partitions.";
+    S := Sort(S,func<a,b|#a-#b>);
+    k := #S[1];
+    if k eq 1 then return S[1]; end if;
+    P := {S[1]};
+    for i:=2 to #S do
+        Q := Contractions(S[i],k);
+        R := P meet Q;
+        while #R eq 0 do
+            k -:= 1;
+            if k eq 1 then return {{*&+S[1]*}}; end if;
+            P := &join[MinimalContractions(p):p in P];
+            Q := &join[MinimalContractions(p):p in Q];
+            R := P meet Q;
+        end while;
+        P := R;
+    end for;
+    return P;
+end intrinsic;
+
+
+/*
+This code should work but does not due to bugs in Magma's integer LP code (in addition to displaying spurious error messages, it occasionally claims no solution exists when it does).
+
+To reproduce these problems:
+
+for a,b in Partitions(12) do if IsRefinement(a,b) ne (Multiset(a) in Contractions(Multiset(b))) then print a,b; assert false; end if; end for;
+
+intrinsic IsRefinement(p::SeqEnum[RngIntElt],q::SeqEnum[RngIntElt]) -> BoolElt
+{ True if q is a refinement of the integer partition p. }
+    require &+p eq &+q: "Incompatible partitions.";
+    if p eq q then return true; end if;
+    LHS := []; RHS:=[];
+    np := #p; nq := #q; m := np*nq;
+    // We use #p*#q binary variables x_{ij} with i ranging over blocks p_i of p and j ranging over blocks q_j of q
+    // We require sum_j x_{ij}*q_j = p_i for all i (writing p_i as the sum of the q_j for which x_ij=1)
+    // We require sum_i x_{ij} = 1 for all j (each q_j is included in the sum for exactly one p_i)
+    // There are thus #p+#q relations
+    z := [Integers()|0:i in [1..m]];
+    for i:=0 to np-1 do
+        r := z;
+        for j:=0 to nq-1 do r[nq*i+j+1] := q[j+1]; end for;
+        Append(~LHS,r); Append(~RHS,[p[i+1]]);
+    end for;
+    for j:=0 to nq-1 do
+        r := z;
+        for i:=0 to np-1 do r[nq*i+j+1] := 1; end for;
+        Append(~LHS,r); Append(~RHS,[1]);
+    end for;
+    v,s := MinimalZeroOneSolution(Matrix(LHS),Matrix([[0]:i in [1..np+nq]]),Matrix(RHS),Matrix([[1:i in [1..m]]]));
+    return s eq 0;
+end intrinsic;
+
+intrinsic IsRefinement(p::SetMulti[RngIntElt],q::SetMulti[RngIntElt]) -> BoolElt
+{ True if q is a refinement of the integer partition p. }
+    return IsRefinement([n:n in p],[n:n in q]);
+end intrinsic;
+*/
 
 intrinsic C4C6Invariants(E::CrvEll[FldRat]) -> RngInt, RngInt
 { Returns the c4 and c6 invariants of the specified elliptic curve E/Q (assumes E is defined by an integral model). }
@@ -655,7 +775,7 @@ intrinsic SPQInvariants (f::MonStgElt) -> SeqEnum
 end intrinsic;
 
 intrinsic SPQIsIsomorphic(f1::RngMPolElt, f2::RngMPolElt) -> BoolElt, GrpMatElt
-{ Tests isomorphism of smooth plane curves f(x,y,z)=0 by computing a matrix M in GL(3,F) such that f1^M is a scalar multiple of f2. }
+{ Tests isomorphism of smooth plane curves f(x,y,z)=0 by computing a matrix M in GL(3,F) such that f1^M is a scalar multiple of f2. Original implementation due to Michael Stoll.}
     require VariableWeights(Parent(f1)) eq [1,1,1]: "Inputs must be trivariate polynomials.";
     require IsHomogeneous(f1) and Degree(f1) eq 4 and IsHomogeneous(f2) and Degree(f2) eq 4: "Input polynomials must be ternary quartic forms.";
     R := Parent(f1);
@@ -824,3 +944,41 @@ intrinsic LPolynomialToPointCounts (L::RngUPolElt:d:=0) -> SeqEnum[RngIntElt], R
     if d eq 0 then d := #t; end if;
     return [q^i+1-t[i] : i in [1..d]];
 end intrinsic;
+
+intrinsic ParallelJobs (cmd::MonStgElt, jobs::RngIntElt, workers::RngIntElt:infile:="",vkey:="")
+{ Runs the specified cmd (which may contain multiple ;-terminated Magma commands) in parallel across the specified number of jobs using the specified number of workers (each as a separate process), using GNU parallel if the number of workers is greater than 1.
+  The string jobid will be set to 0,1,...,jobs-1 in each job; cmd can use this to distinguish the job it is running.
+  The optional string infile can used to specify that job n is to be run only when infile_n is nonempty.
+  The optional string vkey can be used to propagate a verbosity setting into workers. }
+    require workers gt 0: "number of workers must be positive";
+    if jobs le 0 then printf "RunJobs called with no jobs, nothing to do!"; return; end if;
+    gotwork := infile eq "" select func<i|true> else func<i|not IsEof(Read(Open(infile cat "_" cat itoa(i),"r"),1))>;
+    if workers gt jobs then workers := jobs; end if;
+    if workers eq 1 then
+        vprintf ParallelJobs: "RunJobs running %o jobs inline: %o\n", jobs, cmd;
+        cnt := 0; for i:=0 to jobs-1 do if gotwork(i) then jobid:=itoa(i); sts := eval cmd cat "; return true;"; cnt +:= 1; end if; end for;
+        return;
+    end if;
+    jobfile := Tempname("magmajob"); jobsfile := Tempname("magmajobs"); logfile := Tempname("magmajoblog"); Flush(Open(logfile,"w"));
+    if #vkey gt 0 then
+        Puts(Open(jobfile,"w"),
+             Sprintf("SetVerbose(\"%o\",%o); try %o; catch e print e`Object; print e`Position; print \"segfaulting to force retry\"; func<n|$$(n+1)>(1); end try; fp:=Open(\"%o_done_\" cat jobid,\"w\"); Puts(Open(\"%o_\" cat jobid,\"a\"),jobid); exit;",
+                     vkey,GetVerbose(vkey), cmd, jobfile, logfile));
+    else
+        Puts(Open(jobfile,"w"),
+             Sprintf("try %o; catch e print e`Object; print e`Position; print \"segfaulting to force retry\"; func<n|$$(n+1)>(1); end try; fp:=Open(\"%o_done_\" cat jobid,\"w\"); Puts(Open(\"%o_\" cat jobid,\"a\"),jobid); exit;",
+                     cmd, jobfile, logfile));
+    end if;
+    fp := Open(jobsfile,"w"); joblist := [];
+    for i:=0 to jobs-1 do if gotwork(i) then donefile := jobfile cat "_done_" cat itoa(i); Puts(fp, Sprintf("rm -f %o ; until [ -f \"%o\" ]; do magma -b jobid:=%o %o ; if ! [ -f %o ]; then echo \"retrying job %o\"; fi; done; rm -f %o ;", donefile, donefile, i, jobfile, donefile, i, donefile)); Append(~joblist,i); end if; end for;
+    delete fp;
+    if workers gt #joblist then workers := #joblist; end if;
+    if #joblist gt workers then vprintf ParallelJobs: "RunJobs using parallel to split %o tasks across %o threads\n", #joblist, workers; end if;
+    timer := Realtime();
+    System(Sprintf("rm -f %o_* ; parallel -u --joblog /tmp/log --jobs %o -u < %o ; cat %o_* > %o 2>/dev/null ; rm -f %o_*", logfile, workers, jobsfile, logfile, logfile, logfile));
+    okay := {atoi(r):r in Split(Read(logfile))};
+    missing := [i:i in joblist|not i in okay];
+    if #missing gt 0 then print "FAILURE: error in RunJobs, parallel missed jobs:", sprint(missing); error "Jobs retry failed"; end if;
+    System(Sprintf("rm %o %o %o",jobfile,jobsfile,logfile));
+    vprintf ParallelJobs: "RunJobs parallel execution of %o jobs using %o workers%o took %.3os (\"%o\")\n", #joblist, workers, okay eq Set(joblist) select "" else " failed and", Realtime()-timer, cmd;
+end intrinsic

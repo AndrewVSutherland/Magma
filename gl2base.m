@@ -1,13 +1,26 @@
-freeze;
-
 /*
-    Dependencies: utils.m
+    Dependencies: utils.m, chars.m
 
-    This module implements Magma intrinsics for working with open subgroups H of GL(2,Zhat).
+    This module implements Magma intrinsics GL2xxx for working with open subgroups H of GL(2,Zhat).
     All such H are represented by their projections to GL(2,Z/NZ).
 
     The integer N can be be any integer for which H is the full preimage of its reduction modulo N (the least such N is the level of H).
     The trivial subgroup is represented by the trivial subgroup of GL(2,Z) (since Magma won't let us define the zero ring Integers(1)=Z/Z).
+
+    We also include analogous intrinsics GL1xxx for working with open subgroups H of GL(1,Zhat) aka Zhat*.
+    These could be moved to a separate package file, but since many mirror the corresponding GL2xxx intrinsic, its simpler to have them here.
+
+    Many of the functions here were developed to support the project described in the paper
+
+        "$\ell$-adic images of Galois for elliptic curves over $\mathbb Q$",
+        by J. Rouse, D. Zureick-Brown, and A.V. Sutherland, with an appendix by J. Voight,
+        Forum of Math, Sigma 10 (2022), 62 pages, available at
+
+            https://www.cambridge.org/core/journals/forum-of-mathematics-sigma/article/ell-adic-images-of-galois-for-elliptic-curves-over-mathbb-q-and-an-appendix-with-john-voight/D5BC92F9949B387570A7D764635B6AC8
+
+    Please cite this paper if you use this software in your research.
+
+    Copyright (c) Andrew V. Sutherland, 2019-2024.  See License file for details on copying and usage.
 */
 
 /*** caching ***/
@@ -18,7 +31,6 @@ declare attributes RngInt: GL2Cache, SL2Cache;
 ZZ := Integers();
 ZZ`GL2Cache := AssociativeArray();  // place to cache global information that depends only on N (or on nothing at all)
 ZZ`GL2Cache["htab"] := [];
-ZZ`GL2Cache["modpolys"] := [];
 ZZ`GL2Cache["ssets"] := [];
 ZZ`GL2Cache["sreps"] := AssociativeArray();
 ZZ`GL2Cache["scnts"] := [];
@@ -49,15 +61,15 @@ end intrinsic;
 
 declare verbose GL2, 4;
 
+declare attributes Assoc: SL;
+declare attributes GrpMat: Level, Index, Genus, NegOne, SL; // NegOne can be true/false/unassigned but for SL, unassigned=false.
+
 // Magma won't let us create matrix groups over the ring Z/Z so we use the trivial subgroup of GL(n,Z) to represent the unique group of level 1 for n=1,2
 gl1N1 := sub<GL(1,Integers())|>; gl1N1`Order := 1; gl1N1`Level := 1; gl1N1`Index := 1; gl1N1`NegOne := true;
 sl1N1 := sub<SL(1,Integers())|>; sl1N1`Order := 1; sl1N1`Level := 1; sl1N1`Index := 1; sl1N1`NegOne := true; sl1N1`SL := true;
 gl2N1 := sub<GL(2,Integers())|>; gl2N1`Order := 1; gl2N1`Level := 1; gl2N1`Index := 1; gl2N1`NegOne := true; gl2N1`Genus := 0;
 sl2N1 := sub<SL(2,Integers())|>; sl2N1`Order := 1; sl2N1`Level := 1; sl2N1`Index := 1; sl2N1`NegOne := true; sl2N1`Genus := 0; sl2N1`SL := true;
 
-declare attributes Assoc: SL;
-
-declare attributes GrpMat: Level, Index, Genus, NegOne, SL; // NegOne can be true/false/unassigned but for SL, unassigned=false.
 /*
     Note that SL doesn't just mean the group has determinant 1, it means that we view it as a subgroup of SL(Zhat), which is relevant when lifting, or interpreting Index.
     If H`SL is assigned then Index = [SL:H] and H`Order = #SL/H`Index, otherwise H`Index = [GL:H] and H`Order = #GL/H`Index.
@@ -155,6 +167,17 @@ gl1screps := [[1],[1],[1,2],[1,3],[1,2],[1,5],[1,3],[1,3,5,7],[1,2],[1,3],[1,2],
 
 /*** GL1 functions ***/
 
+intrinsic SL1Ambient(R::RngIntRes) -> GrpMat
+{ Returns GL(2,R) with SL, Order, Index, Level attributes set. }
+    G := SL(1,R); G`SL := true; G`NegOne := false; G`Order := 1; G`Index := 1; G`Level := 1;
+    return G;
+end intrinsic;
+
+intrinsic SL1Ambient(N::RngIntElt) -> GrpMat
+{ Returns SL(1,Z/NZ) (or the trivial subgroup of SL(1,Z) when N=1) with SL, Order, Index, NegOne, Level attributes set. }
+    return N eq 1 select sl2N1 else SL1Ambient(Integers(N));
+end intrinsic;
+
 intrinsic GL1Ambient(R::RngIntRes) -> GrpMat
 { Returns GL(1,R) with Order, Index, and Level attributes set. }
     G := GL(1,R); G`Order := EulerPhi(#R); G`NegOne := true; G`Index := 1; G`Level := 1;
@@ -214,6 +237,14 @@ intrinsic GL1Lift(H::GrpMat,M::RngIntElt) -> GrpMat
     return gl1copyattr(sub<GL1|gens,H @@ pi>,H); // this is fast
 end intrinsic;
 
+intrinsic GL1Lift(N::RngIntElt,Dlabel::MonStgElt) -> GrpMat
+{ Returns the subgroup of GL(1,Z/NZ) with the specified determinant label. }
+    if N eq 1 then return gl1N1, 1; end if;
+    if Dlabel eq "1.1.1" then return GL1Ambient(N); end if;
+    if Dlabel eq "sl1" then return SL1Ambient(N); end if;
+    return GL1Lift(GL1SubgroupFromLabel(Dlabel),N);
+end intrinsic;
+
 intrinsic GL1Project(H::GrpMat,M::RngIntElt) -> GrpMat
 { The projection to GL(2,Z/MZ) of the full preimage in GL(2,Z/LCM(M,N)Z) of H in GL(2,Z/NZ); here M may be any positive integer.
   If H`Level is set and M is a multiple of H`Level then the level (along with the known index and order) will be preserved. }
@@ -225,7 +256,7 @@ intrinsic GL1Project(H::GrpMat,M::RngIntElt) -> GrpMat
     return assigned H`Level and IsDivisibleBy(M,H`Level) select gl1copyattr(ChangeRing(H,Integers(M))) else ChangeRing(H,Integers(M));
 end intrinsic;
 
-// Do not change this function
+// Do not change this function, labels depend on it
 intrinsic GL1CanonicalGenerators(N::RngIntElt) -> SeqEnum[RngIntElt]
 { Returns a canonical list of integers that generate (Z/NZ)*. }
     if N le #gl1gens then return gl1gens[N]; end if;
@@ -240,6 +271,80 @@ intrinsic GL1CanonicalGenerators(N::RngIntElt) -> SeqEnum[RngIntElt]
     for i:=1 to #q do Append(~gens,CRT([PrimitiveRoot(q[i]),1],[q[i],N div q[i]])); end for;
     return gens;
 end intrinsic;
+
+intrinsic GL1Characters(H::GrpMat) -> SeqEnum[RngIntElt]
+{ Sorted list of Conrey indexes i of the Conrey characters N.i of modulus N whose kernels contain the specififed subgroup H of GL(1,Integers(N)). }
+    require Degree(H) eq 1: "H must be a subgroup of GL(1,Z/NZ).";
+    N := #BaseRing(H); if not IsFinite(N) then assert H eq gl2N1; return [1]; end if;
+    gens := [Integers()|m[1][1]:m in Generators(H)]; ones := [1:g in gens];
+    return [n : n in [1..N-1] | GCD(N,n) eq 1 and &and[ConreyCharacterAngle(N,n,m) eq 1 : m in gens]];
+end intrinsic;
+
+intrinsic GL1SquareClassReps(N::RngIntElt) -> SeqEnum[RngIntElt]
+{ Sorted list of minimal positive integers representing the square classes in (Z/NZ)*. }
+    if N le #gl1screps then return gl1screps[N]; end if;
+    A,pi := MultiplicativeGroup(Integers(N));
+    B := sub<A|[2*g:g in A]>;
+    C,phi := quo<A|B>; iphi := Inverse(phi);
+    S := Sort([Min([Integers()|pi(s+a):a in Kernel(phi)]) where s:=iphi(c):c in C]);
+    return S;
+end intrinsic;
+
+intrinsic GL1Label(H::GrpMat) -> MonStgElt
+{ The label N.i.n of the subgroup H of GL(1,Zhat). }
+    require Degree(H) eq 1: "H should be a subgroup of GL(1,Z/NZ).";
+    N,H := GL1Level(H);
+    if N eq 1 then return "1.1.1"; end if;
+    if H`Index eq EulerPhi(N) then return Sprintf("%o.%o.%o", N, H`Index, 1); end if;
+    S := Sort([GL1Characters(K`subgroup): K in Subgroups(GL1Ambient(N):IndexEqual:=H`Index) | GL1Level(K`subgroup) eq N]);
+    return Sprintf("%o.%o.%o", N, H`Index, Index(S,GL1Characters(H)));
+end intrinsic;
+
+intrinsic GL1SubgroupFromLabel(s::MonStgElt) -> GrpMat
+{ The subgroup of GL(1,Zhat) with the specified label. }
+    if s eq "1.1.1" then return gl1N1; end if;
+    r := Split(s,".");
+    require #r eq 3: "Invalid label format, expected N.i.n";
+    N := atoi(r[1]); i := atoi(r[2]); n := atoi(r[3]);
+    S := [H`subgroup : H in Subgroups(GL(1,Integers(N)):IndexEqual:=i) | GL1Level(H`subgroup) eq N];
+    require n ge 1 and n le #S: "Invalid label N.i.n, the component n exceeds the number of subgroups of level N and index i";
+    if #S eq 1 then return S[1]; end if;
+    return S[T[n][2]] where T := Sort([<GL1Characters(S[i]),i>: i in [1..#S]]);
+end intrinsic;
+
+intrinsic GL1Labels(N::RngIntElt) -> SeqEnum[MonStgElt]
+{ Sorted list of labels of subgroups of GL(1,Z/NZ). }
+    if N le 2 then return ["1.1.1"]; end if;
+    S := [H`subgroup:H in Subgroups(GL1Ambient(N))];
+    X := IndexFibers([1..#S],func<i|[N,S[i]`Index] where N:=GL1Level(S[i])>);
+    K := Sort([k:k in Keys(X)]);
+    return &cat[[Sprintf("%o.%o.%o",k[1],k[2],n):n in [1..#X[k]]]:k in K];
+end intrinsic;
+
+intrinsic GL1Subgroups(N::RngIntElt) -> SeqEnum[GrpMat], SeqEnum[MonStgElt]
+{ List of subgroups of GL(1,Z/NZ) sorted by label followed by a corresponding list of labels. }
+    if N eq 1 then return [gl1N1], ["1.1.1"]; end if;
+    S := [H`subgroup:H in Subgroups(GL1Ambient(N))];
+    X := IndexFibers([1..#S],func<i|[N,S[i]`Index] where N:=GL1Level(S[i])>);
+    K := Sort([k:k in Keys(X)]);
+    for k in K do if #X[k] gt 1 then T := Sort([<GL1Characters(ChangeRing(S[X[k][i]],Integers(k[1]))),i>:i in [1..#X[k]]]); X[k] := X[k][[r[2]:r in T]]; end if; end for;
+    return &cat[S[X[k]]:k in K], &cat[[Sprintf("%o.%o.%o",k[1],k[2],n):n in [1..#X[k]]]:k in K];
+end intrinsic;
+
+intrinsic GL1CompareLabels(a::MonStgElt,b::MonStgElt) -> RngIntElt
+{ Lexicographically compares subgroup labels of GL(1,Zhat) the form N.i.n (N=level, i=index, n=ordinal) as lists of integers.  Returns -1,0,1. }
+    if a eq b then return 0; end if; if a eq "?" then return 1; end if; if b eq "?" then return -1; end if;
+    r := [atoi(x):x in Split(a,".")]; s := [atoi(x):x in Split(b,".")];
+    require #r eq 3: "Invalid GL1-subgroup label";
+    return r lt s select -1 else 1;
+end intrinsic;
+
+intrinsic GL1SortLabels(L::SeqEnum[MonStgElt]) -> SeqEnum[MonStgElt]
+{ Sorts the specified list of labels of subgroups of GL(1,Zhat). }
+    L := Sort(L,func<a,b|GL1CompareLabels(a,b)>);
+    return L;
+end intrinsic;
+
 
 /*** GL2/SL2 ambients ***/
 
@@ -277,7 +382,7 @@ end intrinsic;
 
 /*** GL2/SL2 lift/project ***/
 
-// IMPORTANT: do not change anything that would impact the lifting functions below, we want the generators of the lift to be canonical
+// IMPORTANT: do not change anything that would impact the outputs of the lifting functions below, labels rely on this
 
 function gl1ker(N,M)
     gens := GL1CanonicalGenerators(M);
@@ -290,7 +395,7 @@ intrinsic GL2ElementLifter(N::RngIntElt,M::RngIntElt) -> UserProgram
 { Returns a function that will canonically lift an element of GL(2,Z/NZ) to GL(2,Z/MZ) for given integers N dividing M (it is canonical in the sense that the generators of the output are a deterministic function of the generators of the input). }
     require IsDivisibleBy(M,N): "Domain level (first parameter) must divide codomain level (second parameter).";
     if N eq M then return func<h|h>; end if;
-    GL2 := GL(2,Integers(M)); M2 := MatrixRing(Integers(),2); m := &*[a[1]^a[2]:a in Factorization(M)|N mod a[1] eq 0];
+    GL2 := GL(2,Integers(M)); M2 := MatrixRing(Integers(),2); m := &*[ZZ|a[1]^a[2]:a in Factorization(M)|N mod a[1] eq 0];
     return func<h|GL2!CRT([M2!h,Identity(M2)],[m,M div m])>;
 end intrinsic;
 
@@ -362,11 +467,12 @@ intrinsic SL2Level(H::GrpMat) -> RngIntElt, GrpMat
     return N, N eq M select H else sl2copyattr(ChangeRing(H,Integers(N)),H);
 end intrinsic;
 
+// Do not change this function, labels depend on it
 intrinsic SL2ElementLifter(N::RngIntElt,M::RngIntElt) -> UserProgram
 { Returns a function that will canonically lift an element of SL(2,Z/NZ) to SL(2,Z/MZ) for given integers N dividing M (it is canonical in the sense that the generators of the output are a deterministic function of the generators of the input). }
     require IsDivisibleBy(M,N): "Domain level (first parameter) must divide codomain level (second parameter).";
     if N eq M then return func<h|h>; end if;
-    SL2 := SL(2,Integers(M)); M2 := MatrixRing(Integers(),2); Q := [a[1]^a[2]:a in Factorization(M)|N mod a[1] eq 0];
+    SL2 := SL(2,Integers(M)); M2 := MatrixRing(Integers(),2); Q := [Integers()|a[1]^a[2]:a in Factorization(M)|N mod a[1] eq 0];
     function hensel(h,q)
         assert Determinant(h) eq 1;
         h := ChangeRing(M2!h,Integers(q)); i := GCD(h[1][1],q) eq 1 and GCD(h[2][2],q) eq 1 select 1 else 2; d := 1/h[2][3-i];
@@ -869,6 +975,7 @@ intrinsic GL2PermutationRepresentation(H::GrpMat:noCosetAction:=false) -> Map
     N := #BaseRing(H); if not IsFinite(N) then assert H eq gl2N1; return map<H->Sym(1)|>; end if;
     if (not noCosetAction and IsPrime(N)) or GL2DeterminantIndex(H) gt 1 then return CosetAction(GL2Ambient(N),H); end if;
     M,SH := SL2Level(H);
+    if M eq 1 then assert GL2Index(H) eq 1; return map<H->Sym(1)|>; end if;
     if (not noCosetAction and M eq N) then return CosetAction(GL2Ambient(N),H); end if;
     /*
         Proof that this algorithm works when H has full determinant (warning, it does not work in general, hence the check above!):
@@ -1004,6 +1111,11 @@ intrinsic GL2DeterminantReps(H::GrpMat) -> Assoc
     return X;
 end intrinsic;
 
+intrinsic GL2DeterminantLabel(H::GrpMat) -> MonStgElt
+{ The label of det(H) as a subgroup of GL(1,Zhat). }
+    return GL1Label(GL2DeterminantImage(H));
+end intrinsic;
+
 intrinsic GL2Scalars(H::GrpMat) -> GrpMat
 { For H a subgroup of GL2 returns the scalar subgroup of H, for H a subgroup of GL1 returns the corresponding scalar subgroup of GL2 }
     require not assigned H`SL: "H should be a subgroup of GL2 that is not marked as a subgroup of SL2.";
@@ -1027,23 +1139,29 @@ intrinsic GL2ScalarIndex(H::GrpMat) -> RngIntElt
     return GL1Index(GL2ScalarSubgroupGL1(H));
 end intrinsic;
 
-intrinsic GL2ContainsComplexConjugation(H::GrpMat:CH:=[]) -> BoolElt, GrpMatElt
+intrinsic GL2ScalarLabel(H::GrpMat) -> MonStgElt
+{ The label of det(H) as a subgroup of GL(1,Zhat). }
+    return GL1Label(GL2ScalarSubgroupGL1(H));
+end intrinsic;
+
+intrinsic GL2ContainsComplexConjugation(H::GrpMat:CH:=[]) -> BoolElt
 { True if H contains an element corresponding to complex conjugation (any GL2-conjugate of [1,0,0,-1] or [1,1,0,-1]). }
     require not assigned H`SL: "H should be a subgroup of GL2 that is not marked as a subgroup of SL2.";
-    R := BaseRing(H);  if not IsFinite(R) then assert H eq gl2N1; return true,Identity(gl2N1); end if;
+    R := BaseRing(H);  if not IsFinite(R) then assert H eq gl2N1; return true; end if;
     G := GL(2,R); N := #R;
+    i := GL2Index(H); if i eq 1 then return true; end if;
     if #CH gt 0 then return CH[ind(G![1,1,0,-1])] gt 0 or CH[ind(G![1,0,0,-1])] gt 0 where ind := GL2SimilarityClassIndexMap(N); end if;
-    if GL2Index(H) le 1024 then pi := GL2PermutationRepresentation(H); return #Fix(pi(G![1,0,0,-1])) gt 0 or #Fix(pi(G![1,1,0,-1])) gt 0; end if;
+    if i le 1024 then pi := GL2PermutationRepresentation(H); return #Fix(pi(G![1,0,0,-1])) gt 0 or #Fix(pi(G![1,1,0,-1])) gt 0; end if;
     cc := [[1,0,0,-1],[-1,0,0,1],[1,-1,0,-1],[1,1,0,-1],[-1,0,1,1],[-1,1,0,1],[-1,0,-1,1],[1,0,1,-1],[-1,-1,0,1],[1,0,-1,-1],[0,-1,-1,0],[0,1,1,0]];
-    cc := [c:c in cc|G!c in H];
-    if #cc gt 0 then return true,cc[1]; end if;
-    if N ne 2 and not IsEven(#GL(1,R) div GL2DeterminantIndex(H)) then return false,_; end if;
+    if &or[G!c in H:c in cc] then return true; end if;
+    if #cc gt 0 then return true; end if;
+    if N ne 2 and not IsEven(#GL(1,R) div GL2DeterminantIndex(H)) then return false; end if;
     Z := Conjugates(G,G![1,0,0,-1]);
     for z in Z do if z in H then return true,z; end if; end for;
     if IsOdd(N) then return false; end if;
     Z := Conjugates(G,G![1,1,0,-1]);
     for z in Z do if z in H then return true,z; end if; end for;
-    return false,_;
+    return false;
 end intrinsic;
 
 intrinsic GL2ContainsCC(H::GrpMat) -> BoolElt
@@ -1170,23 +1288,13 @@ intrinsic GL2CuspOrbits(H::GrpMat:slow:=false,CH:=[]) -> RngIntElt
     return [[a[1],a[2]]:a in Sort(Eltseq(M))];
 end intrinsic;
 
-intrinsic GL2CuspCountSlow(H::GrpMat) -> RngIntElt
+intrinsic GL2CuspCount(H::GrpMat:slow:=false) -> RngIntElt
 { The number of cusps of X_H over C = GL2DeterminantIndex(H) * #PSL2-orbits of H under the action of [1,1,0,1]. }
     di := GL2DeterminantIndex(H);
     N,H := SL2Level(GL2IncludeNegativeOne(H));
     if N eq 1 then return di; end if;
     SL2 := SL2Ambient(N);
-    pi := CosetAction(SL2,H);
-    T:=sub<SL2|[1,1,0,1]>;
-    return di*#Orbits(pi(T));
-end intrinsic;
-
-intrinsic GL2CuspCount(H::GrpMat) -> RngIntElt
-{ The number of cusps of X_H over C = GL2DeterminantIndex(H) * #PSL2-orbits of H under the action of [1,1,0,1]. }
-    di := GL2DeterminantIndex(H);
-    N,H := SL2Level(GL2IncludeNegativeOne(H));
-    if N eq 1 then return di; end if;
-    SL2 := SL2Ambient(N);
+    if slow then return di*#Orbits(CosetAction(SL2,H)(sub<SL2|[1,1,0,1]>)); end if;
     CH := SL2SimilarityCounts(H); C:=SL2SimilarityCounts(N); ind := SL2SimilarityClassIndexMap(N);
     D := Divisors(N); g := SL2![1,1,0,1]; fix := [];
     for d in D do fix[d] := (H`Index*CH[i]) div C[i] where i:=ind(g^d); end for;        // fix[d] = [SL2/H]^(g^d) = # fix points of any h in <g> of order N/d
@@ -2061,40 +2169,46 @@ intrinsic SL2PrimitiveSimilarityReps(N::RngIntElt) -> SetIndx
     return S;
 end intrinsic;
 
+gl2psfile := func<N|"gl2psindex_" cat itoa(N) cat ".dat">;
+
 intrinsic GL2SavePrimitiveSimilarityIndexes(N::RngIntElt) -> BoolElt
 { Write list of primitive similarity indexes for GL(2,Z/NZ) to disk. }
-    filename := "gl2psindex_" cat itoa(N) cat ".dat";
-    if OpenTest(filename,"r") then return false; end if;
-    WriteObject(Open(filename,"w"),GL2PrimitiveSimilarityIndexes(N:NoFile));
+    if OpenTest(gl2psfile(N),"r") then return false; end if;
+    WriteObject(Open(gl2psfile(N),"w"),GL2PrimitiveSimilarityIndexes(N:NoFile));
+    vprintf GL2,2: "Saved primitive GL2 similarity indexes for N=%o to %o\n", N, gl2psfile(N);
     return true;
 end intrinsic;
 
 intrinsic GL2LoadPrimitiveSimilarityIndexes(N::RngIntElt) -> BoolElt
 { Read list of primitive similarity indexes for GL(2,Z/NZ) from disk. }
-    b,fp := OpenTest("gl2psindex_" cat itoa(N) cat ".dat","r"); if not b then return false; end if;
+    b,fp := OpenTest(gl2psfile(N),"r"); if not b then return false; end if;
     ZZ := Integers();
     try
         ZZ`GL2Cache["psindexes"][N] := ReadObject(fp);
+        vprintf GL2,2: "Loaded primitive GL2 similarity index table for N=%o from %o\n", N, gl2psfile(N);
     catch e;
         return false;
     end try;
     return true;
 end intrinsic;
 
+sl2psfile := func<N|"sl2psindex_" cat itoa(N) cat ".dat">;
+
 intrinsic SL2SavePrimitiveSimilarityIndexes(N::RngIntElt) -> BoolElt
 { Write list of primitive similarity indexes for SL(2,Z/NZ) to disk. }
-    filename := "sl2psindex_" cat itoa(N) cat ".dat";
-    if OpenTest(filename,"r") then return false; end if;
-    WriteObject(Open(filename,"w"),SL2PrimitiveSimilarityIndexes(N:NoFile));
+    if OpenTest(sl2psfile(N),"r") then return false; end if;
+    WriteObject(Open(sl2psfile(N),"w"),SL2PrimitiveSimilarityIndexes(N:NoFile));
+    vprintf GL2,2: "Saved primitive SL2 similarity indexes for N=%o to %o\n", N, sl2psfile(N);
     return true;
 end intrinsic;
 
 intrinsic SL2LoadPrimitiveSimilarityIndexes(N::RngIntElt) -> BoolElt
 { Read list of primitive similarity indexes for GL(2,Z/NZ) from disk. }
-    b,fp := OpenTest("sl2psindex_" cat itoa(N) cat ".dat","r"); if not b then return false; end if;
+    b,fp := OpenTest(sl2psfile(N),"r"); if not b then return false; end if;
     ZZ := Integers();
     try
         ZZ`SL2Cache["psindexes"][N] := ReadObject(fp);
+        vprintf GL2,2: "Loaded primitive SL2 similarity index table for N=%o from %o\n", N, sl2psfile(N);
     catch e;
         return false;
     end try;
@@ -2692,11 +2806,11 @@ intrinsic SL2Canonicalize(H::GrpMat:Algorithm:="default") -> GrpMat, GrpMatElt
         c := GL2ElementLifter(HH`Level,N)(c); // Changed from SL2ElementLifter on 11/22/2023 because c need not have determinant 1
         HH := SL2Lift(HH,N);
         assert HH eq H1^c;
+        Hc := H^c;
         NHH := Normalizer(G,HH); T := RightTransversal(NHH,HH); assert T[1] eq Identity(HH);
         gens := gl2fgens(HH);
-        Kgens := Sort([Eltseq(G!h in Hc select h else gl2neg(h,N)): h in gens]) where Hc := H^c;
-        K := sub<G|Kgens>;
-        assert H^c eq K;
+        Kgens := Sort([Eltseq(G!h in Hc select h else gl2neg(h,N)): h in gens]);
+        K := sub<G|Kgens>;  assert K eq Hc;
         t := T[1];
         for i:=2 to #T do
             Ktgens := Sort([Eltseq(G!h in Kt select h else gl2neg(h,N)) : h in gens]) where Kt := K^T[i];
@@ -2751,7 +2865,7 @@ end intrinsic;
 intrinsic GL2Canonicalize(H::GrpMat:Algorithm:="default") -> GrpMat, GrpMatElt
 { Canonically generated canonical representative of the GL2-conjugacy class of a full determinant subgroup H reduced to its level N.
   This is the trivial subgroup of GL(2,Z) when N is 1 and otherwise has the following structure.
-  The list of generators includs a list of canoncial generators for the intersection of H with SL2.  When the SL2Level M of H is less than N this
+  The list of generators includes a list of canoncial generators for the intersection of H with SL2.  When the SL2Level M of H is less than N this
   will consist of the matrices [1,M,0,1],[1,0,M,1],[1+M,M,-M,1-M] generating the kernel of the reduction map from SL(2,Z/NZ) -> SL(2,Z/MZ)
   followed by canoncial lifts to level N of the generators g produced by SL2Canonicalize (as computed by SL2Lift using hensel+CRT).
   The list of generators continues with generators that do not have determinant one chosen using the same algorithm used by SL2Canonicalize.
@@ -2763,20 +2877,19 @@ intrinsic GL2Canonicalize(H::GrpMat:Algorithm:="default") -> GrpMat, GrpMatElt
     G := GL2Ambient(N);
     if not GL2ContainsNegativeOne(H) then
         HH,c := GL2Canonicalize(GL2IncludeNegativeOne(H):Algorithm:=Algorithm);
-        c := GL2ElementLifter(HH`Level,N)(c);
+        c := GL2ElementLifter(HH`Level,N)(c); Hc := H^c;
         HH := GL2Lift(HH,N); NHH := Normalizer(G,HH); T := RightTransversal(NHH,HH); assert T[1] eq Identity(HH);
         gens := gl2fgens(HH);
-        Kgens := Sort([Eltseq(G!h in Hc select h else gl2neg(h,N)): h in gens]) where Hc := H^c;
+        Kgens := Sort([Eltseq(G!h in Hc select h else gl2neg(h,N)): h in gens]);
         K := sub<HH|Kgens>;
-        assert H^c eq K;
+        assert Hc eq K;
         t := T[1];
-        assert H^c eq K^t;
         for i:=2 to #T do
             Ktgens := Sort([Eltseq(G!h in Kt select h else gl2neg(h,N)) : h in gens]) where Kt := K^T[i];
             if Ktgens lt Kgens then Kgens := Ktgens; t := T[i]; end if;
         end for;
-        K := gl2copyattr(sub<GL(2,Integers(N))|Kgens>,H);
-        vprintf GL2,2: "Computed canonical generators %of for fine level %o GL2 subgroup of order %o in %.3os\n", sprint(GL2Generators(K)), N, sprint(GL2Generators(H)), H`Order, Cputime()-start;
+        K := gl2copyattr(sub<G|Kgens>,H);
+        vprintf GL2,2: "Computed canonical generators %o for fine level %o GL2 subgroup with generators %o of order %o in %.3os\n", sprint(GL2Generators(K)), N, sprint(GL2Generators(H)), H`Order, Cputime()-start;
         assert H^(c*t) eq K;
         return K,c*t;
     end if;
@@ -2839,40 +2952,95 @@ intrinsic SL2CanonicalGenerators(H::GrpMat) -> SeqEnum[SeqEnum[RngIntElt]]
     return SL2Generators(SL2Canonicalize(H));
 end intrinsic;
 
+// obsolete but needed for RSZB  labels
+intrinsic GL2MinimalGenerators(H::GrpMat) -> SeqEnum[SeqEnum[RngIntElt]]
+{ Lex-minimal sequence of nonredundant generators for H (begins with non-identity h1 in H of least Eltseq, then least h2 in H not in <h1>, ...).
+  For the purpose of comparison, matrices [[a,b],[c,d]] in GL(2,Z/NZ) are treated as sequences of integers [a,b,c,d] with entries in [0..N-1].
+  In Magma this is the same as comparing Eltseq(g) to Eltseq(h) but **differs** from comparing g to h. 
+  The return value is a lex-sorted list of [a,b,c,d] quadruples that define the minimal generators.
+  This function is obsolete (and expensive to compute), it exists solely for the purpose of computing the tiebreaker of last resort for RSZB labels (but is not needed for LMFDB labels). }
+    N,H := GL2Level(H); if N eq 1 then return []; end if;
+    gens := [];
+    S := Exclude({Eltseq(h):h in H},Eltseq(Identity(H)));
+    while #S gt 0 do
+        h := Min(S); Append(~gens,h); K := sub<H|gens>;
+        if GL2Order(K) eq H`Order then return gens; end if;
+        S diff:= {Eltseq(h):h in K};
+    end while;
+    return gens;
+end intrinsic;
+
+// obsolete but needed for RSZB  labels
+intrinsic GL2MinimalConjugate(H::GrpMat) -> SeqEnum[SeqEnum[RngIntElt]]
+{ Minimal sequence of generators for the minimal conjugate of H in GL(2,Z/NZ), where N is the level of H.
+  This function is obsolete (and expensive to compute), it exists solely for the purpose of computing the tiebreaker of last resort for RSZB labels (but is not needed for LMFDB labels). }
+    N,H := GL2Level(H); if N eq 1 then return []; end if;
+    G := GL2Ambient(N);
+    S := conjugates(G,H) where conjugates := func<G,H|[Conjugate(H,a):a in GL2RightTransversal(Normalizer(G,H))]>;
+    T := [H:H in S|h in H] where h := G![0,1,1,0]; if #T gt 0 then S := T; else T := [H:H in S|h in H] where h := G![0,1,1,1]; if #T gt 0 then S := T; end if; end if;
+    if #S eq 1 then return GL2MinimalGenerators(S[1]); end if;
+    A := [Min([k:k in K]):K in S]; a := Min(A);
+    if a eq G![1,0,0,1] then A := [Min([k:k in K|k ne a]):K in S]; a := Min(A); end if;
+    S := [S[i]:i in [1..#S]|A[i] eq a];
+    if #S eq 1 then return GL2MinimalGenerators(S[1]); end if;
+    return Min([GL2MinimalGenerators(K):K in S]);
+end intrinsic;
+
 /*** GL2 Refinements ***/
 
 intrinsic GL2RemoveConjugates(S::SeqEnum[GrpMat],G::GrpMat) -> SeqEnum[GrpMat]
 { Reduces a list of subgroups of a group G to a sublist of G-conjugacy class representatives. }
-    X := IndexFibers([1..#S],func<i|GL2SubgroupKey(S[i])>);
+    if #S le 1 then return S; end if;
+    X := IndexFibers([1..#S],func<i|GL2GassmannHash(S[i])>);
     L := [];
-    for k in Keys(X) do T := [X[k][1]]; r := X[k]; for i:=2 to #r do if &and[not IsConjugate(G,S[r[i]],S[j]): j in T] then Append(~T,r[i]); end if; end for; L cat:=T; end for;
+    for k in Keys(X) do
+        T := [X[k][1]]; r := X[k];
+        for i:=2 to #r do if &and[not IsConjugate(G,S[r[i]],S[j]): j in T] then Append(~T,r[i]); end if; end for;
+        L cat:=T;
+    end for;
     return S[Sort(L)];
 end intrinsic;
 
-intrinsic GL2HasRefinements(H::GrpMat) -> SeqEnum[GrpMat]
+intrinsic GL2HasRefinements(H::GrpMat) -> BoolElt
 { Given H containing -I, returns true of H has at least one quadratic refinement and false otherwise. }
-    H2 := GL2Lift(H,2*GL2Level(H)); nI := H2!-Identity(H2);
+    require GL2ContainsNegativeOne(H): "The specified group H does not contain -I.";
+    N,H := GL2Level(H);
+    H2 := GL2Lift(H,2*N); nI := H2!-Identity(H2);
     A,pi:=AbelianQuotient(H2);  A2 := Image(hom<A->A|x:->2*x>);
     return not pi(nI) in A2;
 end intrinsic;
 
-intrinsic GL2Refinements(H::GrpMat) -> SeqEnum[GrpMat]
+intrinsic GL2Refinements(H::GrpMat:CosetActionBound:=8192) -> SeqEnum[GrpMat]
 { Given H containing -I, returns a list of index-2 subgroups of H that do not contain -I, up to conjugacy in the ambient GL2. }
+    R := BaseRing(H); N := #R;  if not IsFinite(N) then assert H eq gl2N1; return []; end if;
+    require GL2ContainsNegativeOne(H): "The specified group H does not contain -I.";
     H := GL2MinimizeGenerators(H:MaxAttempts:=5);
-    g := [g:g in Generators(H)]; V := CartesianPower([true,false],#g); n := GL2Order(H);
-    S := [sub<H|[v[i] select g[i] else -g[i]:i in [1..#g]]>: v in V];
-    S := [K:K in S|GL2Order(K) lt n];
-    return GL2RemoveConjugates(S,H);
+    S := [sub<H|[v[i] select g[i] else -g[i]:i in [1..#g]]>: v in V] where V := CartesianPower([true,false],#g) where g := [g:g in Generators(H)];
+    S := [K:K in S|GL2Order(K) lt n] where n := GL2Order(H);
+    if #S le 1 then return S; end if;
+    I := [1];
+    NH := Normalizer(GL2Ambient(N),H);
+    if Index(NH,H) le CosetActionBound then
+        pi := [CosetAction(NH,S[1])];
+        for i:=2 to #S do
+            j := 1; while j le #I and #Fix(pi[j](S[i])) eq 0 do j +:= 1; end while;
+            if j gt #I then I[j] := i; pi[j] := CosetAction(NH,S[i]); end if;
+        end for;
+    else
+        for i:=2 to #S do
+            j := 1; while j le #I and not IsConjugate(NH,S[i],S[I[j]]) do j +:= 1; end while;
+            if j gt #I then I[j] := i; end if;
+        end for;
+    end if;
+    return S[I];
 end intrinsic;
 
 intrinsic GL2QuadraticTwists(H::GrpMat : IncludeGeneric:=true) -> SeqEnum[GrpMat]
 { Given a subgroup H of GL(2,Z/NZ), returns the list of subgroups K of <H,-I> := G for which <K,-I> = G (including H), up to conjugacy in GL2. }
-    R := BaseRing(H); N := #R;  if not IsFinite(N) then assert H eq gl2N1; return [H]; end if;
-    // caller should deal with this, if #R mod 4 eq 2 then H:=GL2Lift(H,4*#R); R:=BaseRing(H); end if; // need to lift level 2*m to 8*m to be sure to see all quadratic twists
-    G := GL2IncludeNegativeOne(H); nI := -Identity(G);
-    S := [K`subgroup:K in MaximalSubgroups(G:IndexEqual:=2)|not nI in K`subgroup];
-    GL2 := GL2Ambient(N);
-    if #S gt 1 then time S := GL2RemoveConjugates(S,G); end if;
+    R := BaseRing(H); N := #R;  if not IsFinite(N) then assert H eq gl2N1; return IncludeGeneric select [H] else []; end if;
+    S := [K`subgroup:K in MaximalSubgroups(G:IndexEqual:=2)|not nI in K`subgroup] where nI := -Identity(H) where G:=GL2IncludeNegativeOne(H); 
+    G := GL2Ambient(N);
+    if #S gt 1 then S := GL2RemoveConjugates(S,G); end if;
     for i:=1 to #S do S[i]`NegOne := false; S[i]`Index := G`Order div S[i]`Order; end for;
     return IncludeGeneric select [G] cat S else S;
 end intrinsic;
