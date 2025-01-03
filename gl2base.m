@@ -1525,13 +1525,13 @@ intrinsic GL2Arith(N::RngIntElt) -> GrpMat
 end intrinsic;
 
 intrinsic GL2Arith1(M::RngIntElt, N::RngIntElt) -> GrpMat
-{ The intersection of GL2Borel1(MN) and GL2SplitCartan1(M), corresponding to X_arith,1(M,MN). }
-    require M gt 0 and N gt 0: "M and N must be positive";
-    if M*N eq 1 then return gl2N1; end if;
-    R := Integers(M*N);
+{ For M dividing N, the intersection of GL2Borel1(N) and GL2SplitCartan1(M), corresponding to X_arith,1(M,N). }
+    require M gt 0 and N gt 0 and IsDivisibleBy(N,M): "M and N must be positive integers with M|N";
+    if N eq 1 then return gl2N1; end if;
+    R := Integers(N);
     m,pi := MultiplicativeGroup(R); gm := [pi(g):g in Generators(m)];
     H := sub<GL(2,R) | [[1,0,0,g] : g in gm], [1,M,0,1]>;
-    H`Order := N*EulerPhi(M*N); H`Index := GL2Size(M*N) div H`Order; H`Level := M*N; H`NegOne:= false;
+    H`Order := (N div M)*EulerPhi(N); H`Index := GL2Size(N) div H`Order; H`Level := N; H`NegOne:= false;
     return H;
 end intrinsic;
 
