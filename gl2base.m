@@ -434,7 +434,7 @@ intrinsic GL2Project(H::GrpMat,M::RngIntElt) -> GrpMat
     N := #BaseRing(H); if not IsFinite(N) then assert H eq gl2N1; return GL2Ambient(M); end if;
     if M eq 1 then return gl2N1; elif N eq M then return H; end if;
     if not IsDivisibleBy(N,M) then N := LCM(M,N); H := GL2Lift(H,N); if N eq M then return H; end if; end if;
-    if assigned H`Level and IsDivisibleBy(M,H`Level) then return gl2copyattr(ChangeRing(H,Integers(M))); end if;
+    if assigned H`Level and IsDivisibleBy(M,H`Level) then return gl2copyattr(ChangeRing(H,Integers(M)),H); end if;
     HH := ChangeRing(H,Integers(M));
     if M le 2 or (assigned H`NegOne and H`NegOne) then HH`NegOne := true; end if;
     return HH;
@@ -517,7 +517,7 @@ intrinsic SL2Project(H::GrpMat,M::RngIntElt) -> GrpMat
     N := #BaseRing(H); if not IsFinite(N) then assert H eq sl2N1; return SL2Ambient(M); end if;
     if M eq 1 then return sl2N1; elif N eq M then return H; end if;
     if not IsDivisibleBy(N,M) then N := LCM(M,N); H := SL2Lift(H,N); if N eq M then return H; end if; end if;
-    if assigned H`Level and IsDivisibleBy(M,H`Level) then return sl2copyattr(ChangeRing(H,Integers(M))); end if;
+    if assigned H`Level and IsDivisibleBy(M,H`Level) then return sl2copyattr(ChangeRing(H,Integers(M)),H); end if;
     HH := ChangeRing(H,Integers(M)); HH`SL := true;
     if M le 2 or (assigned H`NegOne and H`NegOne) then HH`NegOne := true; end if;
     return HH;
@@ -1144,6 +1144,24 @@ intrinsic GL2ScalarLabel(H::GrpMat) -> MonStgElt
     return GL1Label(GL2ScalarSubgroupGL1(H));
 end intrinsic;
 
+intrinsic GL2ContainsScalars(H::GrpMat) -> RngIntElt
+{ Returns true if H contains the scalar subgroup of its ambient. }
+    return GL2ScalarIndex(H) eq 1;
+end intrinsic;
+
+intrinsic GL2IncludeScalars(H::GrpMat) -> RngIntElt
+{ Returns true if H contains the scalar subgroup of its ambient. }
+    require not assigned H`SL: "H should be a subgroup of GL2 that is not marked as a subgroup of SL2.";
+    zi := GL2ScalarIndex(H);  if zi eq 1 then return H; end if;
+    R := BaseRing(H); G := GL2Ambient(R);
+    gg := [g:g in Generators(Z1)|not g in H] where Z1 := GL2Scalars(R);
+    HH := sub<G|H,gg>;
+    HH`NegOne := true;
+    if assigned H`Index then HH`Index := ExactQuotient(H`Index,zi); end if;
+    if assigned H`Order then HH`Order := zi*H`Order; end if;
+    return HH;
+end intrinsic;
+
 intrinsic GL2ContainsComplexConjugation(H::GrpMat:CH:=[]) -> BoolElt
 { True if H contains an element corresponding to complex conjugation (any GL2-conjugate of [1,0,0,-1] or [1,1,0,-1]). }
     require not assigned H`SL: "H should be a subgroup of GL2 that is not marked as a subgroup of SL2.";
@@ -1191,8 +1209,8 @@ intrinsic GL2IncludeNegativeOne(H::GrpMat) -> GrpMat
     if assigned H`NegOne and H`NegOne then return H; end if;
     nI := -Identity(H);
     if nI in H then H`NegOne := true; return H; end if;
-    R := BaseRing(H); if #R eq 2 then HH := sub<GL(2,R)|H>; HH`NegOne := true; return HH; end if;
-    HH := sub<GL(2,R)|H,nI>; HH`NegOne := true;
+    HH := sub<GL(2,BaseRing(H))|H,nI>; HH`NegOne := true;
+    if assigned H`Index then HH`Index := ExactQuotient(H`Index,2); end if;
     if assigned H`Order then HH`Order := 2*H`Order; end if;
     return HH;
 end intrinsic;
@@ -1211,15 +1229,15 @@ intrinsic SL2IncludeNegativeOne(H::GrpMat) -> GrpMat
     if not IsFinite(BaseRing(H)) then assert H eq sl2N1; H`NegOne:=true; return H; end if;
     if assigned H`NegOne and H`NegOne then return H; end if;
     nI := -Identity(H);
-    if not assigned H`NegOne and nI in H then H`NegOne := true; return H; end if;
-    R := BaseRing(H); if #R eq 2 then HH := sub<SL(2,R)|H>; HH`SL := true; HH`NegOne := true; return HH; end if;
-    HH := sub<SL(2,R)|H,nI>; HH`SL := true; HH`NegOne := true;
+    if nI in H then H`NegOne := true; return H; end if;
+    HH := sub<SL(2,BaseRing(H))|H,nI>; HH`SL := true; HH`NegOne := true;
+    if assigned H`Index then HH`Index := ExactQuotient(H`Index,2); end if;
     if assigned H`Order then HH`Order := 2*H`Order; end if;
     return HH;
 end intrinsic;
 
 intrinsic GL2CommutatorSubgroup(H::GrpMat) -> GrpMat
-{ returns the commutator subgroup K = [H,H], where H is viewed as the open subgroup of GL2(Zhat) given by the inverse image of the input H in GL(2,Z/NZ).  The group K is a subgroup of SL(2,Z/MZ) where M is the level of [H,H] as an open subgroup of SL2(Zhat).  Note: K will typically not be equal to the commutator subgroup of H as a subgroup of GL(2,Z/NZ), and M may be divislbe by primes that do not divide N (in particular, M is always even). }
+{ Computes the commutator subgroup K = [H,H], where H is viewed as the open subgroup of GL2(Zhat) given by the inverse image of the input H in GL(2,Z/NZ).  The group K is a subgroup of SL(2,Z/MZ) where M is the level of [H,H] as an open subgroup of SL2(Zhat).  Note: K will typically not be equal to the commutator subgroup of H as a subgroup of GL(2,Z/NZ), the level M may be much larger than N (M=2*N^2 is possible). }
     require not assigned H`SL: "H should be a subgroup of GL2 that is not marked as a subgroup of SL2";
     N,H := GL2Level(H);
     if N eq 1 then return K where _,K:=SL2Level(sub<SL(2,Integers(2))|[0,1,1,1]>); end if;
@@ -1227,7 +1245,7 @@ intrinsic GL2CommutatorSubgroup(H::GrpMat) -> GrpMat
     A := Factorization(N);
     com := func<H|CommutatorSubgroup(H)>;
     for a in A do p := a[1]; e := a[2]; while SL2Index(com(GL2ProjectKernel(H,p^e))) lt SL2Index(com(GL2ProjectKernel(H,p^(e+1)))) do e +:= 1; N *:= p; end while; end for;
-    _,K := SL2Level(com(GL2Lift(H,N)));
+    M,K := SL2Level(com(GL2Lift(H,N)));
     return K;
 end intrinsic;
 
@@ -1236,13 +1254,15 @@ intrinsic GL2IsAgreeable(H::GrpMat) -> BoolElt
     return GL2DeterminantIndex(H) eq 1 and GL2ScalarIndex(H) eq 1 and Set(PrimeDivisors(GL2Level(H))) join {2} eq Set(PrimeDivisors(SL2Level(H))) join {2};
 end intrinsic;
 
-intrinsic GL2AgreeableClosure(H::GrpMat) -> GrpMat
-{ Returns the agreeable closure of H (the smallest agreeable subgroup of GL(2,Zhat) that contains H). }
-    NN,H := GL2Level(H);
-    if NN eq 1 then return H; end if;
-    M := &*[ZZ|p^Valuation(NN,p):p in PrimeDivisors(N)] where N:=SL2Level(GL2CommutatorSubgroup(H));
-    H := ChangeRing(H,Integers(M));
-    return GL2ScalarIndex(H) eq 1 select H else sub<GL2Ambient(M)|H,GL2Scalars(M)>;
+// As suggested by Emir Karabiyik, there is no need to compute the level of commutator subgroup of H
+intrinsic GL2AgreeableClosure(H::GrpMat)->GrpMat
+{ Computes the agreeable closure }
+    require not assigned H`SL: "H should be a subgroup of GL2 that is not marked as a subgroup of SL2";
+    require GL2DeterminantIndex(H) eq 1: "H must have determinant index 1";
+    N,H := GL2Level(H); if N eq 1 then return H; end if;
+    L := &*[p^Valuation(N,p):p in PrimeDivisors(2*SL2Level(H))];
+    L,A := GL2Level(GL2IncludeScalars(GL2Project(H,L)));
+    return A;
 end intrinsic;
 
 intrinsic GL2AgreeableQuotient(H::GrpMat) -> GrpAb
@@ -1486,17 +1506,33 @@ intrinsic GL2Scalars(N::RngIntElt) -> GrpMat
     return N eq 1 select gl2N1 else GL2Scalars(Integers(N));
 end intrinsic;
 
-intrinsic GL2SplitCartan1(R::Rng) -> GrpMat
-{ The subgroup of diagonal matrices in GL(2,R) with a 1 in the upper left. }
-    M,pi := MultiplicativeGroup(R);
-    gens := [Integers()!pi(g):g in Generators(M)];
-    return sub<GL(2,R) | [[1,0,0,g] : g in gens]>;
+intrinsic GL2SplitCartan1(R::RngIntRes) -> GrpMat
+{ The subgroup of the standard split Cartan subgroup of GL(2,R) consisting of diagonal matrices with a 1 in the upper left. }
+    m,pi := MultiplicativeGroup(R); gm := [pi(g):g in Generators(m)];
+    H := sub<GL(2,R) | [[1,0,0,g] : g in gm]>;
+    N := #R; H`Order := EulerPhi(N); H`Index := GL2Size(N) div H`Order; H`Level := N; H`NegOne := false;
+    return H;
 end intrinsic;
 
 intrinsic GL2SplitCartan1(N::RngIntElt) -> GrpMat
-{ The subgroup of diagonal matrices in GL(2,R) with a 1 in the upper left. }
-    require N gt 0: "N must be positive";
-    return N gt 1 select GL2SplitCartan1(Integers(N)) else sub<GL(2,Integers())|>;
+{ The standard split Cartan subgroup of GL(2,Z/NZ) consisting of diagonal matrices. }
+    return N eq 1 select gl2N1 else GL2SplitCartan1(Integers(N));
+end intrinsic;
+
+intrinsic GL2Arith(N::RngIntElt) -> GrpMat
+{ The subgroup of diagonal matrices in GL(2,Z/NZ) with a 1 in the upper left, corresponding to X_arith(N). }
+    return GL2SplitCartan1(N);
+end intrinsic;
+
+intrinsic GL2Arith1(M::RngIntElt, N::RngIntElt) -> GrpMat
+{ The intersection of GL2Borel1(MN) and GL2SplitCartan1(M), corresponding to X_arith,1(M,MN). }
+    require M gt 0 and N gt 0: "M and N must be positive";
+    if M*N eq 1 then return gl2N1; end if;
+    R := Integers(M*N);
+    m,pi := MultiplicativeGroup(R); gm := [pi(g):g in Generators(m)];
+    H := sub<GL(2,R) | [[1,0,0,g] : g in gm], [1,M,0,1]>;
+    H`Order := N*EulerPhi(M*N); H`Index := GL2Size(M*N) div H`Order; H`Level := M*N; H`NegOne:= false;
+    return H;
 end intrinsic;
 
 intrinsic GL2SplitCartan(R::RngIntRes) -> GrpMat
@@ -1510,19 +1546,6 @@ end intrinsic;
 intrinsic GL2SplitCartan(N::RngIntElt) -> GrpMat
 { The standard split Cartan subgroup of GL(2,Z/NZ) consisting of diagonal matrices. }
     return N eq 1 select gl2N1 else GL2SplitCartan(Integers(N));
-end intrinsic;
-
-intrinsic GL2SplitCartan1(R::RngIntRes) -> GrpMat
-{ The subgroup of the standard split Cartan subgroup of GL(2,R) consisting of diagonal matrices with a 1 in the upper left. }
-    m,pi := MultiplicativeGroup(R); gm := [pi(g):g in Generators(m)];
-    C := sub<GL(2,R) | [[1,0,0,g] : g in gm]>;
-    N := #R; C`Order := EulerPhi(N); C`Index := GL2Size(N) div C`Order; C`Level := N; C`NegOne := false;
-    return C;
-end intrinsic;
-
-intrinsic GL2SplitCartan1(N::RngIntElt) -> GrpMat
-{ The standard split Cartan subgroup of GL(2,Z/NZ) consisting of diagonal matrices. }
-    return N eq 1 select gl2N1 else GL2SplitCartan1(Integers(N));
 end intrinsic;
 
 intrinsic GL2SplitCartanNormalizer(R::RngIntRes) -> GrpMat
@@ -1574,7 +1597,7 @@ intrinsic GL2NonsplitCartanNormalizer(N::RngIntElt) -> GrpMat
 end intrinsic;
 
 intrinsic GL2NonsplitCartanFullNormalizer(N::RngIntElt) -> GrpMat
-{ The normalizer in GL2(Z/NZ) of the reduction of the Nonsplit Cartan, properly contains GL2NonplitCartanNormalizer when N is not prime. }
+{ The normalizer in GL2(Z/NZ) of the reduction of the Nonsplit Cartan, properly contains GL2NonsplitCartanNormalizer when N is not prime. }
     if N le 2 then return gl2N1; end if;
     return H where _,H := GL2Level(Normalizer(GL2Ambient(N),GL2NonsplitCartan(N)));
 end intrinsic;
@@ -1886,10 +1909,8 @@ intrinsic GL2Standardize(H::GrpMat) -> GrpMat, GrpMatElt
     b,a := IsConjugateSubgroup(G,GL2Borel1(N),H); if b then return gl2copyattr(Conjugate(H,a),H),a; end if;
     b,a := IsConjugateSubgroup(G,GL2Borel(N),H); if b then return gl2copyattr(Conjugate(H,a),H),a; end if;
     b,a := IsConjugateSubgroup(G,GL2SplitCartanNormalizer(N),H); if b then return gl2copyattr(Conjugate(H,a),H),a; end if;
-    b,a := IsConjugateSubgroup(G,GL2SplitCartanFullNormalizer(N),H); if b then return gl2copyattr(Conjugate(H,a),H),a; end if;
     b,a := IsConjugateSubgroup(G,GL2NonsplitCartan(N),H); if b then return gl2copyattr(Conjugate(H,a),H),a; end if;
-    b,a := IsConjugateSubgroup(G,GL2NonsplitCartanNormalizer(N),H); if b then return gl2copyattr(Conjugate(H,a),H),a; end if;
-    b,a := IsConjugateSubgroup(G,GL2NonsplitCartanFullNormalizer(N),H); if b then return gl2copyattr(Conjugate(H,a),H),a; end if;
+    if N gt 2 then b,a := IsConjugateSubgroup(G,GL2NonsplitCartanNormalizer(N),H); if b then return gl2copyattr(Conjugate(H,a),H),a; end if; end if;
     return H,Identity(H);
 end intrinsic;
 
@@ -2397,19 +2418,22 @@ intrinsic GL2SimilarityCounts(H::GrpMat:Algorithm:="default",Primitive:=false,Sp
     else
         if Primitive then C := GL2PrimitiveSimilarityCounts(N); S := GL2PrimitiveSimilarityReps(N);
         else C := GL2SimilarityCounts(N); S := GL2SimilarityReps(N); end if;
+        assert #C eq #S;
         n := GL2Index(H);
         // There is a very difficult to reproduce magma bug (as of 2.27-8) that will occasionally cause ExactQuotient to fail due to a bogus map returned by CosetAction
         // Re-executing the exact same line will often fix the problem
         try
-        cnts := [ExactQuotient(C[i]*#Fix(pi(S[i])),n):i in [1..#C]] where pi := Algorithm eq "action" select CosetAction(GL2Ambient(N),H) else GL2PermutationRepresentation(H);
+            pi := Algorithm eq "action" select CosetAction(GL2Ambient(N),H) else GL2PermutationRepresentation(H);
+            c := [#Fix(pi(S[i])): i in [1..#S]];
+            cnts := [ExactQuotient(C[i]*c[i],n):i in [1..#C]];
         catch e
-            print "ExactQuotient failed in GL2SimilarityCounts",N,sprint(GL2Generators(H)),Algorithm,Primitive,Sparse,n;
-            cnts := [C[i]*#Fix(pi(S[i]))/n:i in [1..#C]] where pi := Algorithm eq "action" select CosetAction(GL2Ambient(N),H) else GL2PermutationRepresentation(H);
-            if not &and[Denominator(c) eq 1: c in cnts] then
-                print "Retry failed:", sprint(cnts);
-                error e;
-            end if;
-            cnts := [Numerator(c):c in C];
+            printf "ExactQuotient failed in GL2SimilarityCounts for subgroup of level %o, index %o, generated by %o, with Algorithm:=%o, Primive:=%o\n",N,n,sprint(GL2Generators(H)),Algorithm,Primitive;
+            if Primitive then C := GL2PrimitiveSimilarityCounts(N); S := GL2PrimitiveSimilarityReps(N);
+            else C := GL2SimilarityCounts(N); S := GL2SimilarityReps(N); end if;
+            pi := Algorithm eq "action" select CosetAction(GL2Ambient(N),H) else GL2PermutationRepresentation(H);
+            c := [#Fix(pi(S[i])): i in [1..#S]];
+            cnts := [ExactQuotient(C[i]*c[i],n):i in [1..#C]];
+            print "retry succeeded!";
         end try;
     end if;
     return Sparse select [[i,cnts[i]]:i in [1..#cnts]|cnts[i] ne 0] else cnts;
@@ -2895,8 +2919,8 @@ intrinsic GL2Canonicalize(H::GrpMat:Algorithm:="default") -> GrpMat, GrpMatElt
     end if;
     K,g := SL2Canonicalize(H:Algorithm:=Algorithm); M := K`Level;
     vprintf GL2,4: "Computed canonical SL2 subgroup K = %o of level %o, order %o, index %o in %.3os\n", sprint(GL2Generators(K)), K`Level, K`Order, K`Index, Cputime()-timer; timer := Cputime();
-    if K`Order eq H`Order then assert M eq N; delete K`SL; return K,g; end if;
     if M lt N then K := SL2Lift(K,N); g := GL2ElementLifter(M,N)(g); end if;
+    if K`Order eq H`Order then delete K`SL; return K,g; end if;
     H := gl2copyattr(H^g,H);
     R := GL2PrimitiveSimilarityReps(N); I,f := GL2PrimitiveSimilarityLists(H:Algorithm:=Algorithm); GC := GL2PrimitiveSimilarityCounts(N);
     J := [r[3] : r in Sort([<-Order(R[I[i]]),-GC[I[i]],i> : i in [1..#I] | Determinant(R[I[i]]) ne 1])]; I := I[J];
@@ -3010,7 +3034,8 @@ intrinsic GL2HasRefinements(H::GrpMat) -> BoolElt
     return not pi(nI) in A2;
 end intrinsic;
 
-intrinsic GL2Refinements(H::GrpMat:CosetActionBound:=8192) -> SeqEnum[GrpMat]
+/*
+intrinsic GL2RefinementsOld(H::GrpMat:CosetActionBound:=8192) -> SeqEnum[GrpMat]
 { Given H containing -I, returns a list of index-2 subgroups of H that do not contain -I, up to conjugacy in the ambient GL2. }
     R := BaseRing(H); N := #R;  if not IsFinite(N) then assert H eq gl2N1; return []; end if;
     require GL2ContainsNegativeOne(H): "The specified group H does not contain -I.";
@@ -3033,6 +3058,23 @@ intrinsic GL2Refinements(H::GrpMat:CosetActionBound:=8192) -> SeqEnum[GrpMat]
         end for;
     end if;
     return S[I];
+end intrinsic;
+*/
+
+intrinsic GL2Refinements(H::GrpMat:CosetActionBound:=8192) -> SeqEnum[GrpMat]
+{ Given H containing -I, returns a list of index-2 subgroups of H that do not contain -I, up to conjugacy in the ambient GL2. }
+    require GL2ContainsNegativeOne(H): "The specified group H does not contain -I.";
+    S := [K`subgroup:K in MaximalSubgroups(H:IndexEqual:=2)|not GL2ContainsNegativeOne(K`subgroup)];
+    if #S eq 0 then return S; end if;
+    NH := Normalizer(GL2Ambient(#BaseRing(H)),H);
+    T := RightTransversal(NH,H);
+    X := Set(S); S := [];
+    while #X gt 1 do
+        K := Random(X);
+        Append(~S,K); X diff:= {K^g:g in T};
+    end while;
+    S cat:= [K:K in X];
+    return S;
 end intrinsic;
 
 intrinsic GL2QuadraticTwists(H::GrpMat : IncludeGeneric:=true) -> SeqEnum[GrpMat]
@@ -3077,4 +3119,69 @@ intrinsic GL2SexticCMTwists(N::RngIntElt : NegOneOnly := false) -> SeqEnum[GrpMa
     end if;
     for i := 1 to #S do S[i]`Index := G`Order div S[i]`Order; end for;
     return S;
+end intrinsic;
+
+CMdiscs := [-3,-4,-7,-8,-11,-12,-16,-19,-27,-28,-43,-67,-163];
+
+intrinsic GL2CMTwists(D::RngIntElt,N::RngIntElt:NegOneOnly:=false) -> SeqEnum[GrpMat]
+{ List of the subgroups of GL(2,Z/NZ) that can arise as mod-N images of an elliptic curve E/Q(j(E)) with CM by the imaginary quadratic order of discriminant D. }
+    require D lt 0 and IsDiscriminant(D): "D must be the discriminant of an imaginary quadratic order";
+    if N eq 1 then return [gl2N1]; end if;
+    if D lt -3 and IsOdd(N) and GCD(D,N) eq 1 and IsPrimePower(N) then return [GL2CartanNormalizer(D,N)]; end if; // by (4) of Theorem 1.2 of https://arxiv.org/abs/1809.02584
+    if D eq -3 and N gt 3 and IsPrime(N) and D in CMdiscs then
+        // usse Proposition 1.16 of https://arxiv.org/abs/1508.07660 to speed up this case
+        H := GL2CartanNormalizer(D,N);
+        if N mod 9 in [1,8] then return [H]; end if;
+        S := [K`subgroup : K in Subgroups(H:IndexEqual:=3) | GL2DeterminantIndex(K`subgroup) eq 1];  assert #S eq 1;
+        S[1]`Index := 3*H`Index;
+        return [H,S[1]];
+    end if;
+    if D lt -4 then L := NegOneOnly select [H] else GL2QuadraticTwists(H) where H := GL2CartanNormalizer(D,N);
+    elif D eq -4 then L := GL2QuarticCMTwists(N:NegOneOnly:=NegOneOnly);
+    else L := GL2SexticCMTwists(N:NegOneOnly:=NegOneOnly); end if;
+    return L;
+end intrinsic;
+
+intrinsic GL2RationalCMPoints(H::GrpMat) -> SeqEnum[RngIntElt]
+{ List of CM discriminants of CM elliptic curves corresponding to Q-points on X_H. }
+    ZZ := Integers();
+    require GL2DeterminantIndex(H) eq 1: "Subgroup must have determininant index 1 (parametrizing E/Q).";
+    if GL2ScalarIndex(H) gt 1 then return [ZZ|]; end if;
+    N,H := GL2Level(GL2IncludeNegativeOne(H));
+    if N eq 1 then return CMdiscs; end if;
+    if not IsDefined(ZZ`GL2Cache["cmtwists"],N) then ZZ`GL2Cache["cmtwists"][N] := [GL2CMTwists(D,N:NegOneOnly):D in CMdiscs]; end if;
+    CMtwists := ZZ`GL2Cache["cmtwists"][N];  assert #CMtwists eq #CMdiscs;
+    CMtwists := [[K:K in r|m mod #K eq 0]:r in CMtwists] where m:=#H;
+    I := [i: i in [1..#CMtwists]|#CMtwists[i] gt 0]; if #I eq 0 then return [ZZ|]; end if;
+    issub := func<K|#Fix(pi(K)) gt 0> where pi:=GL2PermutationRepresentation(H);
+    return [ZZ|CMdiscs[i] : i in I | &or[issub(K):K in CMtwists[i]]];
+end intrinsic;
+
+intrinsic CMDiscriminantRepresentatives(N::RngIntElt:Qonly:=false) -> SeqEnum[RngIntElt]
+{ A list of CM discriminants representating every posssible value mod N or 4*N (those congruent to 0 or 1 mod N), depending on whether N is odd or even, inluding -3,-4; if Qonly is set, only D of class number 1 are considered. }
+    require N gt 1: "N must be greater than 1";
+    if Qonly then return ReduceToReps(CMdiscs,func<D1,D2|IsDivisibleBy(D1-D2,IsEven(N) select 4*N else N)>); end if;
+    if IsEven(N) then
+        return [-i:i in [3..4*N]|IsDiscriminant(-i)];
+    else
+        return [Max([D: D in [-i,-i-N,-i-2*N]|IsDiscriminant(D)]):i in [1..Max(N,4)]];
+    end if;
+end intrinsic;
+
+intrinsic GL2CMMaximalTwists(N::RngIntElt:Qonly:=false) -> SeqEnum[GrpMat]
+{  List of the subgroups of GL(2,Z/NZ) that arise as a maximal mod-N image of a CM elliptic curve E/F over its minimal field of definition F=Q(j). }
+    if N eq 1 then return [gl2N1]; end if;
+    G := GL(2,Integers(N));
+    DD := CMDiscriminantRepresentatives(N:Qonly:=Qonly);
+    L := ReduceToReps([GL2CartanNormalizer(D,N) : D in DD],func<H1,H2|IsConjugate(G,H1,H2)>);
+    return Sort(L,func<a,b|#b-#a>);
+end intrinsic;
+
+intrinsic GL2CMTwists(N::RngIntElt:Qonly:=false) -> SeqEnum[GrpMat]
+{  List of the subgroups of GL(2,Z/NZ) that arise as mod-N image of a CM elliptic curve E/F over its minimal field of definition F=Q(j). }
+    if N eq 1 then return [gl2N1]; end if;
+    G := GL(2,Integers(N));
+    DD := CMDiscriminantRepresentatives(N:Qonly:=Qonly);
+    L := ReduceToReps(&cat[GL2CMTwists(D,N) : D in DD],func<H1,H2|IsConjugate(G,H1,H2)>);
+    return Sort(L,func<a,b|#b-#a>);
 end intrinsic;
