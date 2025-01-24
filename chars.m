@@ -803,23 +803,23 @@ intrinsic Factorization (s::MonStgElt) -> SeqEnum
 end intrinsic;
 
 intrinsic Parity (q::RngIntElt, n::RngIntElt) -> RngIntElt
-{ The parity of the Conrey character q.n. }
+{ The parity of the Conrey character q.n, given by its value +/-1 on -1. }
     require q gt 0 and n gt 0 and GCD(q,n) eq 1: "Conrey characters must be specified by a pair of coprime positive integers q,n.";
     return &*[Integers()|KroneckerSymbol(n,p):p in PrimeDivisors(q)|IsOdd(p)]*(q mod 4 ne 0 or n mod 4 eq 1 select 1 else -1);
 end intrinsic;
 
 intrinsic IsEven (q::RngIntElt, n::RngIntElt) -> RngIntElt
-{ The parity of the Conrey character q.n. }
+{ True if the Conrey character q.n has even parity (takes value 1 on -1). }
     return Parity(q,n) eq 1;
 end intrinsic;
 
 intrinsic IsOdd (q::RngIntElt, n::RngIntElt) -> RngIntElt
-{ The parity of the Conrey character q.n. }
+{ True if the Conrey character q.n has odd parity (takes value -1 on -1). }
     return Parity(q,n) eq -1;
 end intrinsic;
 
 intrinsic Parity (s::MonStgElt) -> RngIntElt
-{ The parity of the Conrey character q.n. }
+{ The parity of the Conrey character q.n, given by its value +/-1 on -1. }
     q,n := ConreyCharacterFromLabel(s);
     return Parity(q,n);
 end intrinsic;
@@ -844,12 +844,12 @@ intrinsic Modulus (s::MonStgElt) -> RngIntElt
     return q;
 end intrinsic;
 
-intrinsic IsPrimitive (q::RngIntElt, n::RngIntElt) -> BoolElt
+intrinsic IsPrimitiveCharacter (q::RngIntElt, n::RngIntElt) -> BoolElt
 { Whether the specifed Conrey character q.n is primitive (conductor = modulus = q) or not. }
     return q eq Conductor(q,n);
 end intrinsic;
 
-intrinsic IsPrimitive (s::MonStgElt) -> BoolElt
+intrinsic IsPrimitiveCharacter (s::MonStgElt) -> BoolElt
 { Whether the specifed Conrey character q.n is primitive (conductor = modulus = q) or not. }
     q,n := ConreyCharacterFromLabel(s);
     return IsPrimitive(q,n);

@@ -1525,7 +1525,7 @@ intrinsic GL2Arith(N::RngIntElt) -> GrpMat
 end intrinsic;
 
 intrinsic GL2Arith1(M::RngIntElt, N::RngIntElt) -> GrpMat
-{ For M dividing N, the intersection of GL2Borel1(N) and GL2SplitCartan1(M), corresponding to X_arith,1(M,N). }
+{ For M dividing N, the set of upper triangular matrices in GL(2,Z/NZ) with a 1 in the upper left and upper right congruent to 0 mod M, corresponding to X_arith,1(M,N). }
     require M gt 0 and N gt 0 and IsDivisibleBy(N,M): "M and N must be positive integers with M|N";
     if N eq 1 then return gl2N1; end if;
     R := Integers(N);
@@ -2033,6 +2033,7 @@ end intrinsic;
 // Based on the "baby 2x2 case" in https://arxiv.org/abs/0708.1608 (also see https://mountainscholar.org/bitstream/handle/10217/68201/Williams_colostate_0053A_11267.pdf)
 intrinsic GL2SimilarityInvariant(M::GrpMatElt[RngIntRes]) -> SeqEnum[SeqEnum[RngIntElt]]
 { Given a matrix in GL(2,Z/NZ) returns a list of quadruples of integers (one for each prime divisor of N) that uniquely identifies its similarity/conjugacy class. }
+    require Degree(M) eq 2: "M must be a 2x2 matrix";
     N := #BaseRing(M);
     Z := Integers();
     S := [];
