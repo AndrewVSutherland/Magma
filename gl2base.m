@@ -1,3 +1,4 @@
+freeze;
 /*
     Dependencies: utils.m, chars.m
 

@@ -1,3 +1,4 @@
+freeze;
 /*
     Dependencies: utils.m
     Various utility functions for working with genus 1 curves, including elliptic curves, mostly over Q and over finite fields).

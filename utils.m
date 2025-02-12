@@ -1,3 +1,4 @@
+freeze;
 /*
     General purpose utilities (often things I wished Magma supported directly) and aliases/wrappers for Magma functions to make them easer for me to use and/or remember.
 

@@ -1,3 +1,4 @@
+freeze;
 /*
     Dependencies: utils.m
     Various functions useful for working with Dirichlet characters, their Galois orbits, and Conrey labels
