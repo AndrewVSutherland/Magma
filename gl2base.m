@@ -54,12 +54,28 @@ ZZ`SL2Cache["cclasses"] := AssociativeArray();
 ZZ`SL2Cache["sclasses"] := AssociativeArray();
 ZZ`SL2Cache["psclasses"] := AssociativeArray();
 
-intrinsic GL2Cache() -> Assoc
-{ returns GL2Cache }
-   return ZZ`GL2Cache;
-end intrinsic;
-
 declare verbose GL2, 4;
+
+// only used in gl2points.m but we put it here for access to the GL2Cache
+ClassNumberFilename := "gl2classno.dat";
+
+intrinsic ClassNumberTable(D::RngIntElt:reset:=false) -> SeqEnum[RngIntElt]
+{ Returns an array whose (-D)th entry is h(D), using cached data (loaded from gl2classno.dat if present). }
+    D := Abs(D); if D le 4096 then D:=4096; end if;
+    ZZ := Integers();
+    if reset then ZZ`GL2Cache["htab"] := []; end if;
+    if #ZZ`GL2Cache["htab"] ge D then return ZZ`GL2Cache["htab"][1..D]; end if;
+    if not reset and OpenTest(ClassNumberFilename,"r") then
+        fp := Open(ClassNumberFilename,"r");
+        ZZ`GL2Cache["htab"] := ReadObject(fp);
+        if #ZZ`GL2Cache["htab"] ge D then return ZZ`GL2Cache["htab"][1..D]; end if;
+    end if;
+    vprintf GL2,1: "Extending class number table from |D|=%o to |D|=%o\n", #ZZ`GL2Cache["htab"], D; timer := Realtime();
+    ZZ`GL2Cache["htab"] cat:= [d mod 4 in [0,3] select ClassNumber(-d) else 0 : d in [#ZZ`GL2Cache["htab"]+1..D]];
+    fp := Open(ClassNumberFilename,"w"); WriteObject(fp,ZZ`GL2Cache["htab"]); delete fp;
+    vprintf GL2,1: "Wrote class numbers h(D) for |D| <= %o to %o in %.3os\n", D, ClassNumberFilename, Realtime()-timer;
+    return ZZ`GL2Cache["htab"][1..D];
+end intrinsic;
 
 declare attributes Assoc: SL;
 declare attributes GrpMat: Level, Index, Genus, NegOne, SL; // NegOne can be true/false/unassigned but for SL, unassigned=false.
@@ -1515,13 +1531,32 @@ intrinsic GL2SplitCartan1(R::RngIntRes) -> GrpMat
 end intrinsic;
 
 intrinsic GL2SplitCartan1(N::RngIntElt) -> GrpMat
-{ The standard split Cartan subgroup of GL(2,Z/NZ) consisting of diagonal matrices. }
+{ The subgroup of the standard split Cartan subgroup of GL(2,R) consisting of diagonal matrices with a 1 in the upper left. }
     return N eq 1 select gl2N1 else GL2SplitCartan1(Integers(N));
+end intrinsic;
+
+intrinsic GL2SplitCartanK1(R::RngIntRes) -> GrpMat
+{ The subgroup of the standard split Cartan subgroup of GL(2,R) consisting of diagonal matrices with +/-1 in the upper left. }
+    if #R eq 2 then return sub<R|[]>; end if;
+    m,pi := MultiplicativeGroup(R); gm := [pi(g):g in Generators(m)];
+    H := sub<GL(2,R) | [[1,0,0,g] : g in gm] cat [[-1,0,0,-1]]>;
+    N := #R; H`Order := 2*EulerPhi(N); H`Index := GL2Size(N) div H`Order; H`Level := N; H`NegOne := true;
+    return H;
+end intrinsic;
+
+intrinsic GL2SplitCartanK1(N::RngIntElt) -> GrpMat
+{ The subgroup of the standard split Cartan subgroup of GL(2,R) consisting of diagonal matrices with +/-1 in the upper left. }
+    return N eq 1 select gl2N1 else GL2SplitCartanK1(Integers(N));
 end intrinsic;
 
 intrinsic GL2Arith(N::RngIntElt) -> GrpMat
 { The subgroup of diagonal matrices in GL(2,Z/NZ) with a 1 in the upper left, corresponding to X_arith(N). }
     return GL2SplitCartan1(N);
+end intrinsic;
+
+intrinsic GL2ArithK(N::RngIntElt) -> GrpMat
+{ The subgroup of diagonal matrices in GL(2,Z/NZ) with a +/-1 in the upper left, corresponding to X_arith,+/-1(N). }
+    return GL2SplitCartanK1(N);
 end intrinsic;
 
 intrinsic GL2Arith1(M::RngIntElt, N::RngIntElt) -> GrpMat
@@ -1721,7 +1756,7 @@ intrinsic GL2Borel1(N::RngIntElt) -> GrpMat
 end intrinsic;
 
 intrinsic GL2Borel12(R::Rng) -> GrpMat
-{ The subgroup of the standard Borel subgroup of GL(2,R) that fixes a basis vector and vector of order 2, equivalently, the subgroup of upper triangular matrices in GL(2,R) with a 1 in the upper left and even entries in the upper right. }
+{ The subgroup of the standard Borel subgroup of GL(2,R) that fixes a basis vector and an independent vector of order 2, equivalently, the subgroup of upper triangular matrices in GL(2,R) with a 1 in the upper left and even entries in the upper right. }
     require IsEven(#R): "Base ring must have even cardinality";
     if #R eq 2 then return GL2FromGenerators(2,6,[]); end if;
     m,pi := MultiplicativeGroup(R); gm := Generators(m);
@@ -1731,12 +1766,12 @@ intrinsic GL2Borel12(R::Rng) -> GrpMat
 end intrinsic;
 
 intrinsic GL2Borel12(N::RngIntElt) -> GrpMat
-{ The subgroup of the standard Borel subgroup of GL(2,R) that fixes a basis vector and vector of order 2, equivalently, the subgroup of upper triangular matrices in GL(2,R) with a 1 in the upper left and even entries in the upper right. }
+{ The subgroup of the standard Borel subgroup of GL(2,R) that fixes a basis vector and an independent vector of order 2, equivalently, the subgroup of upper triangular matrices in GL(2,R) with a 1 in the upper left and even entries in the upper right. }
     return N eq 1 select gl2N1 else GL2Borel12(Integers(N));
 end intrinsic;
 
 intrinsic GL2BorelK1(R::Rng) -> GrpMat
-{ The subgroup of the standard Borel subgroup of GL(2,R) that stabilizes +/-v for some basis vector v (under the left action of GL2 on column vectors), equivalently, the subgroup of upper triangular matrices in GL(2,R) with a 1 in the upper left. }
+{ The subgroup of the standard Borel subgroup of GL(2,R) that stabilizes +/-v for some basis vector v (under the left action of GL2 on column vectors), equivalently, the subgroup of upper triangular matrices in GL(2,R) with +/-1 in the upper left. }
     if #R eq 2 then return GL2Borel1(R); end if;
     m,pi := MultiplicativeGroup(R); gm := Generators(m);
     BK1 := sub<GL(2,R) | [[1,0,0,pi(g)] : g in gm], [1,1,0,1], [-1,0,0,-1]>;
@@ -1745,12 +1780,12 @@ intrinsic GL2BorelK1(R::Rng) -> GrpMat
 end intrinsic;
 
 intrinsic GL2BorelK1(N::RngIntElt) -> GrpMat
-{ The subgroup of the standard Borel subgroup of GL(2,Z/NZ) that stablizes +/-v for soem basis vector v (under the left action of GL2 on column vectors), equivalently, the subgroup of upper triangular matrices in GL(2,R) with +/-1 in the upper left. }
+{ The subgroup of the standard Borel subgroup of GL(2,Z/NZ) that stablizes +/-v for some basis vector v (under the left action of GL2 on column vectors), equivalently, the subgroup of upper triangular matrices in GL(2,R) with +/-1 in the upper left. }
     return N eq 1 select gl2N1 else GL2BorelK1(Integers(N));
 end intrinsic;
 
 intrinsic GL2BorelK12(R::Rng) -> GrpMat
-{ The subgroup of the standard Borel subgroup of GL(2,R) that fixes a basis vector (under the left action of GL2 on column vectors), equivalently, the subgroup of upper triangular matrices in GL(2,R) with a 1 in the upper left. }
+{ The subgroup of the standard Borel subgroup of GL(2,R) that stabilizes +/-v for some basis vector v (under the left action of GL2 on column vectors) and fixes an independent vector of order 2, equivalently, the subgroup of upper triangular matrices in GL(2,R) with +/-1 in the upper left  and even entries in the upper right. }
     require IsEven(#R): "Base ring must have even cardinality";
     if #R eq 2 then return GL2FromGenerators(2,6,[]); end if;
     m,pi := MultiplicativeGroup(R); gm := Generators(m);
@@ -1760,8 +1795,13 @@ intrinsic GL2BorelK12(R::Rng) -> GrpMat
 end intrinsic;
 
 intrinsic GL2BorelK12(N::RngIntElt) -> GrpMat
-{ The subgroup of the standard Borel subgroup of GL(2,Z/NZ) that fixes a basis vector (under the left action of GL2 on column vectors), equivalently, the subgroup of upper triangular matrices in GL(2,R) with a 1 in the upper left. }
+{ The subgroup of the standard Borel subgroup of GL(2,R) that stabilizes +/-v for some basis vector v (under the left action of GL2 on column vectors) and fixes an independent vector of order 2, equivalently, the subgroup of upper triangular matrices in GL(2,R) with +/-1 in the upper left  and even entries in the upper right. }
     return N eq 1 select gl2N1 else GL2BorelK12(Integers(N));
+end intrinsic;
+
+intrinsic GL2SturmBound(N::RngIntElt) -> RngIntElt
+{ Computes the Sturm bound m for the space of cusp forms S_2(Gamma) for the congruence subgroup Gamma := Gamma1(N) meet Gamma0(N^2).  If H is a subgroup of GL(2,Zhat) of level N, the simple isogeny factors of Jac(X_H) correspond to modular abelian varieties A_f associated to Galois orbits of weight-2 eigenforms f for Gamma (these f need not be newforms).  The Sturm bound m for S_2(Gamma) allows one to verify a claimed decomposition of Jac(X_H) by comparing the Dirichlet coefficients a_n of the L-series of Jac(X_H) for n <= m to those of the L-series of the product of the L-functions L(A_f,s) taken over the cusp forms f in the claimed decomposition.  See pages 21-22 of https://arxiv.org/abs/2106.11141.}
+    return (N * &*[a[1]^a[2]+a[1]^(a[2]-1):a in Factorization(N)] * EulerPhi(N)) div 6;
 end intrinsic;
 
 intrinsic GL2ProjectiveImage(H::GrpMat) -> GrpPerm
@@ -2075,7 +2115,7 @@ intrinsic SL2SimilaritySet(N::RngIntElt) -> SetIndx[SeqEnum[SeqEnum[RngIntElt]]]
 { Sorted indexed set of similarity invariants in SL(2,Z/NZ). }
     ZZ := Integers();
     if IsDefined(ZZ`SL2Cache["ssets"],N) then return ZZ`SL2Cache["ssets"][N]; end if;
-    if N eq 1 then return {@ [Universe([[ZZ|]])|] @}; end if;
+    if N eq 1 then return {@ [Universe([[Integers()|]])|] @}; end if;
     // This could be made much faster by optimizing for the SL2 case, but this optimization is non-trivial so we won't bother (it is a cached precomputation)
     S :=IndexedSet([r:r in GL2SimilaritySet(N)|Determinant(rep(r)) eq 1]) where rep:=GL2SimilarityClassRepMap(N);
     ZZ`SL2Cache["ssets"][N] := S;
@@ -2087,7 +2127,7 @@ intrinsic GL2SimilarityClasses(N::RngIntElt) -> SeqEnum[Tup]
     ZZ := Integers();
     if IsDefined(ZZ`GL2Cache["sclasses"],N) then return ZZ`GL2Cache["sclasses"][N]; end if;
     if IsDefined(ZZ`GL2Cache["cclasses"],N) then S := [<r[4],r[3]>:r in ZZ`GL2Cache["cclasses"][N]]; ZZ`GL2Cache["sclasses"][N] := S; return S; end if;
-    if N eq 1 then return [<[Universe([ZZ|])|],GL2Ambient(1)![1,0,0,1]>]; end if;
+    if N eq 1 then return [<[Universe([Integers()|])|],GL2Ambient(1)![1,0,0,1]>]; end if;
     A := Factorization(N); GL2 := GL2Ambient(N);
     if #A gt 1 then
         M2 := MatrixRing(Integers(),2);
@@ -2144,7 +2184,7 @@ intrinsic SL2GL2ConjugacyClasses(N::RngIntElt) -> SeqEnum[Tup]
     ZZ := Integers();
     b, S := IsDefined(ZZ`SL2Cache["cclasses"],N);
     if b then return S; end if;
-    if N eq 1 then return [<1,1,SL2Ambient(1)![1,0,0,1],[Universe([ZZ|])|]>]; end if;
+    if N eq 1 then return [<1,1,SL2Ambient(1)![1,0,0,1],[Universe([Integers()|])|]>]; end if;
     SL2 := SL2Ambient(N);
     S := [<r[1],r[2],SL2!r[3],r[4]>:r in GL2ConjugacyClasses(N)|Determinant(r[3]) eq 1];
     ZZ`SL2Cache["cclasses"][N] := S;
@@ -2204,8 +2244,8 @@ end intrinsic;
 intrinsic GL2LoadPrimitiveSimilarityIndexes(N::RngIntElt) -> BoolElt
 { Read list of primitive similarity indexes for GL(2,Z/NZ) from disk. }
     b,fp := OpenTest(gl2psfile(N),"r"); if not b then return false; end if;
-    ZZ := Integers();
     try
+        ZZ := Integers();
         ZZ`GL2Cache["psindexes"][N] := ReadObject(fp);
         vprintf GL2,2: "Loaded primitive GL2 similarity index table for N=%o from %o\n", N, gl2psfile(N);
     catch e;
@@ -2242,7 +2282,7 @@ intrinsic GL2PrimitiveSimilarityIndexes(N::RngIntElt:NoCache:=false,NoFile:=fals
   the minimal representatives of their division (the union of conjugacy classes whose representative generate the same cyclic group, up to conjugacy).  Two subgroups of
   GL(2,Z/NZ) are Gassmann equivalent if and only if they contain the same number of elements in each primitive similarity class. }
     if N eq 1 then return {@ 1 @}; end if;
-    ZZ := Integers();
+    ZZ:=Integers(); ;
     if not NoCache and IsDefined(ZZ`GL2Cache["psindexes"],N) then return ZZ`GL2Cache["psindexes"][N]; end if;
     if not NoFile and GL2LoadPrimitiveSimilarityIndexes(N) then return ZZ`GL2Cache["psindexes"][N]; end if;
     timer := Realtime();
@@ -2255,7 +2295,7 @@ intrinsic GL2PrimitiveSimilarityIndexes(N::RngIntElt:NoCache:=false,NoFile:=fals
             for m:=2 to n-1 do h *:= g; if GCD(m,n) eq 1 then J[ind(h)] := false; end if; end for;
         end if;
     end for;
-    S := IndexedSet(I); ZZ`GL2Cache["psindexes"][N] := S;
+    S := IndexedSet(I); ZZ:=Integers(); ZZ`GL2Cache["psindexes"][N] := S;
     vprintf GL2,2: "Extended primitive GL2 similarity index table to include N=%o in %.3os\n", N, Realtime()-timer; 
     return S;
 end intrinsic;
@@ -2335,7 +2375,7 @@ intrinsic GL2SimilarityCounts(N::RngIntElt) -> SeqEnum[RngIntElt]
 { returns an array T with T[i] counting elements of GL(2,Z/NZ) with the ith similarity invariant (i is an index into GL2SimilaritySet(N)). }
     ZZ := Integers();
     if IsDefined(ZZ`GL2Cache["scnts"],N) then return ZZ`GL2Cache["scnts"][N]; end if;
-    S := [&*[ZZ|sslen(A[j][1],A[j][2],S[i][j]):j in [1..#A]]: i in [1..#S]] where A := Factorization(N) where S:=GL2SimilaritySet(N);
+    S := [&*[Integers()|sslen(A[j][1],A[j][2],S[i][j]):j in [1..#A]]: i in [1..#S]] where A := Factorization(N) where S:=GL2SimilaritySet(N);
     ZZ`GL2Cache["scnts"][N] := S;
     return S; 
 end intrinsic;
@@ -2344,7 +2384,7 @@ intrinsic SL2SimilarityCounts(N::RngIntElt) -> SeqEnum[RngIntElt]
 { returns an array T with T[i] counting elements of SL(2,Z/NZ) with the ith similarity invariant (i is an index into GL2SimilaritySet(N)). }
     ZZ := Integers();
     if IsDefined(ZZ`SL2Cache["scnts"],N) then return ZZ`SL2Cache["scnts"][N]; end if;
-    S := [&*[ZZ|sslen(A[j][1],A[j][2],S[i][j]):j in [1..#A]]: i in [1..#S]] where A := Factorization(N) where S:=SL2SimilaritySet(N);
+    S := [&*[Integers()|sslen(A[j][1],A[j][2],S[i][j]):j in [1..#A]]: i in [1..#S]] where A := Factorization(N) where S:=SL2SimilaritySet(N);
     ZZ`SL2Cache["scnts"][N] := S;
     return S; 
 end intrinsic;
@@ -3145,17 +3185,17 @@ end intrinsic;
 
 intrinsic GL2RationalCMPoints(H::GrpMat) -> SeqEnum[RngIntElt]
 { List of CM discriminants of CM elliptic curves corresponding to Q-points on X_H. }
-    ZZ := Integers();
     require GL2DeterminantIndex(H) eq 1: "Subgroup must have determininant index 1 (parametrizing E/Q).";
-    if GL2ScalarIndex(H) gt 1 then return [ZZ|]; end if;
+    if GL2ScalarIndex(H) gt 1 then return [Integers()|]; end if;
     N,H := GL2Level(GL2IncludeNegativeOne(H));
     if N eq 1 then return CMdiscs; end if;
+    ZZ := Integers();
     if not IsDefined(ZZ`GL2Cache["cmtwists"],N) then ZZ`GL2Cache["cmtwists"][N] := [GL2CMTwists(D,N:NegOneOnly):D in CMdiscs]; end if;
     CMtwists := ZZ`GL2Cache["cmtwists"][N];  assert #CMtwists eq #CMdiscs;
     CMtwists := [[K:K in r|m mod #K eq 0]:r in CMtwists] where m:=#H;
-    I := [i: i in [1..#CMtwists]|#CMtwists[i] gt 0]; if #I eq 0 then return [ZZ|]; end if;
+    I := [i: i in [1..#CMtwists]|#CMtwists[i] gt 0]; if #I eq 0 then return [Integers()|]; end if;
     issub := func<K|#Fix(pi(K)) gt 0> where pi:=GL2PermutationRepresentation(H);
-    return [ZZ|CMdiscs[i] : i in I | &or[issub(K):K in CMtwists[i]]];
+    return [Integers()|CMdiscs[i] : i in I | &or[issub(K):K in CMtwists[i]]];
 end intrinsic;
 
 intrinsic CMDiscriminantRepresentatives(N::RngIntElt:Qonly:=false) -> SeqEnum[RngIntElt]

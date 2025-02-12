@@ -951,11 +951,11 @@ intrinsic ParallelJobs (cmd::MonStgElt, jobs::RngIntElt, workers::RngIntElt:infi
   The optional string infile can used to specify that job n is to be run only when infile_n is nonempty.
   The optional string vkey can be used to propagate a verbosity setting into workers. }
     require workers gt 0: "number of workers must be positive";
-    if jobs le 0 then printf "RunJobs called with no jobs, nothing to do!"; return; end if;
+    if jobs le 0 then printf "ParallelJobs called with no jobs, nothing to do!"; return; end if;
     gotwork := infile eq "" select func<i|true> else func<i|not IsEof(Read(Open(infile cat "_" cat itoa(i),"r"),1))>;
     if workers gt jobs then workers := jobs; end if;
     if workers eq 1 then
-        vprintf ParallelJobs: "RunJobs running %o jobs inline: %o\n", jobs, cmd;
+        vprintf ParallelJobs: "ParallelJobs running %o jobs inline: %o\n", jobs, cmd;
         cnt := 0; for i:=0 to jobs-1 do if gotwork(i) then jobid:=itoa(i); sts := eval cmd cat "; return true;"; cnt +:= 1; end if; end for;
         return;
     end if;
@@ -978,7 +978,7 @@ intrinsic ParallelJobs (cmd::MonStgElt, jobs::RngIntElt, workers::RngIntElt:infi
     System(Sprintf("rm -f %o_* ; parallel -u --joblog /tmp/log --jobs %o -u < %o ; cat %o_* > %o 2>/dev/null ; rm -f %o_*", logfile, workers, jobsfile, logfile, logfile, logfile));
     okay := {atoi(r):r in Split(Read(logfile))};
     missing := [i:i in joblist|not i in okay];
-    if #missing gt 0 then print "FAILURE: error in RunJobs, parallel missed jobs:", sprint(missing); error "Jobs retry failed"; end if;
+    if #missing gt 0 then print "FAILURE: error in ParallelJobs, parallel missed jobs:", sprint(missing); error "Jobs retry failed"; end if;
     System(Sprintf("rm %o %o %o",jobfile,jobsfile,logfile));
-    vprintf ParallelJobs: "RunJobs parallel execution of %o jobs using %o workers%o took %.3os (\"%o\")\n", #joblist, workers, okay eq Set(joblist) select "" else " failed and", Realtime()-timer, cmd;
+    vprintf ParallelJobs: "ParallelJobs parallel execution of %o jobs using %o workers%o took %.3os (\"%o\")\n", #joblist, workers, okay eq Set(joblist) select "" else " failed and", Realtime()-timer, cmd;
 end intrinsic

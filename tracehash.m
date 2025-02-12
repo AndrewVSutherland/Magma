@@ -143,7 +143,7 @@ end intrinsic;
 
 intrinsic SlowTraceHash(C::CrvHyp[FldRat]) -> RngIntElt
 { Given a hyperelliptic curve C/Q computes the hash sum_(2^12<p<2^13) a_p(C)*c_p mod 2^61-1 defined in Sec 4.3 of https://doi.org/10.1112/S146115701600019X. }
-    return TraceHash(TracesOfFrobenius(C,2^13):B0:=2^12);
+    return TraceHash(TracesOfFrobenius(C,2^13:B0:=2^12));
 end intrinsic;
 
 strip := func<s|Join(Split(Join(Split(s," "),""),"\n"),"")>;
@@ -158,23 +158,11 @@ intrinsic TraceHash(C::CrvHyp[FldRat]) -> RngIntElt
 end intrinsic;
 
 intrinsic TwistHash(C::CrvHyp[FldRat]) -> RngIntElt
-{ Given a hyperelliptic curve C/Q computes the hash sum_(2^12<p<2^13) |a_p(C)|*c_p mod 2^61-1, with ap set to zero at bad primes of minimal twist. }
+{ Given a hyperelliptic curve C/Q computes the hash sum_(2^12<p<2^13) |a_p(C)|*c_p mod 2^61-1. }
     require Genus(C) eq 2: "Currently supported only for genus 2 curves";
     R<x> := PolynomialRing(Rationals());
     a := [StringToInteger(s): s in Split(strip(Pipe("hashcurves " cat sprint([Eltseq(f),Eltseq(h)] where f,h:=HyperellipticPolynomials(C)) cat " -1","")),",")];
-    if #a eq 1 then return a[1]; end if;
-    D := Integers()!Discriminant(C);
-    F := GF(2^61-1);  hash := F!a[1]; 
-    for p in a[2..#a] do
-        if Valuation(D,p) mod 10 ne 0 then continue; end if;
-        C := pMinimalWeierstrassModel(C,p); D := Integers()!Discriminant(C);
-        if IsDivisibleBy(D,p) then
-            C := pMinimalWeierstrassModel(QuadraticTwist(C,(p mod 4 eq 1 select p else -p)),p);
-            D := Integers()!Discriminant(C);
-        end if;
-        if not IsDivisibleBy(D,p) then hash +:= (-Coefficient(EulerFactor(C,p),1))*c[#PrimesUpTo(p)-564]; end if;
-    end for;
-    return Integers()!hash;
+    return #a eq 1 select a[1] else Integers()!(F!a[1]+&+[F!Abs(Coefficient(EulerFactor(C,p),1))*c[#PrimesUpTo(p)-564] where p:=a[i]:i in [2..#a]]) where F := GF(2^61-1);
 end intrinsic;
 
 intrinsic TraceHash(C::CrvPln) -> RngIntElt

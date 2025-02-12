@@ -1,6 +1,9 @@
-// Various functions useful for working with Dirichlet characters, their Galois orbits, and Conrey labels
+/*
+    Dependencies: utils.m
+    Various functions useful for working with Dirichlet characters, their Galois orbits, and Conrey labels
 
-// depends on utils.m
+    Copyright (c) Andrew V. Sutherland, 2019-2025.  See License file for details on copying and usage.
+*/
 
 import "utils.m": plog;
 
