@@ -29,6 +29,20 @@ intrinsic GSp(d::RngIntElt, q::RngIntElt) -> GrpMat
     return CSp(d,q);
 end intrinsic;
 
+intrinsic PlaneCurve(f::RngMPolElt) -> CrvPln
+{ The curve in P^2 defined by f(x,y,z) = 0. }
+    require Rank(Parent(f)) eq 3: "Input should be a polynomial in three variables.";
+    return Curve(ProjectiveSpace(Parent(f)),f);
+end intrinsic;
+
+intrinsic PlaneCurve(c::SeqEnum) -> CrvPln
+{ The curve in P^2 defined by f(x,y,z) = 0, where f is specified as a list of binom(d+2,2) coefficients (in lex order matching MonomialsOfDegree so that c eq Coefficients(PlaneCurve(c)) holds). }
+    d := Floor(Sqrt(2*#c))-1;
+    require d gt 1 and #c  eq Binomial(d+2,2): "Then length of the input must be of the form binom(d+2,2) with d > 1.";
+    M := MonomialsOfDegree(PolynomialRing(Parent(c[1]),3),d);  assert #M eq #c;
+    return PlaneCurve(&+[c[i]*M[i]:i in [1..#c]]);
+end intrinsic;
+
 intrinsic Eltseq(s::SetMulti[RngIntElt]) -> SeqEnum
 { Sorted sequence of tuples representing a multiset of integers. }
     return Sort([<n,Multiplicity(s,n)>:n in Set(s)]);
@@ -718,6 +732,25 @@ end intrinsic;
 intrinsic WriteStderr(e::Err)
 { write to stderr }
   WriteStderr(Sprint(e) cat "\n");
+end intrinsic;
+
+intrinsic Coefficients(C::CrvHyp) -> SeqEnum
+{ Returns [Coefficients(f),Coefficients(h)] for the hyperelliptic curve y^+h(x)y = f(x). }
+    return [Coefficients(f),Coefficients(h)] where f,h := HyperellipticPolynomials(C);
+end intrinsic;
+
+intrinsic Coefficients(C::CrvPln) -> SeqEnum
+{ Returns dense list of coefficients of the defining polynomial of C (in lex order matching MonomialsOfDegree). }
+    f := DefiningPolynomial(C); d := Degree(f);
+    c := Coefficients(f); m := Monomials(f);
+    M := MonomialsOfDegree(Parent(f),Degree(f));
+    r := [0:i in [1..#M]]; for i:=1 to #c do r[Index(M,m[i])] := c[i]; end for;
+    return r;
+end intrinsic;
+
+intrinsic CoefficientString(C::Crv) -> SeqEnum
+{ Returns a string encoding the cofficients of the curve C. }
+    return sprint(Coefficients(C));
 end intrinsic;
 
 function CanonicalizeRationalInvariants (v,w)
