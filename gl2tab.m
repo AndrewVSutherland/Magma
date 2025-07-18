@@ -363,12 +363,16 @@ end intrinsic;
 function gl2keytab(inrecs : Z:=AssociativeArray(), N:=0, sl2:=false, makegroups:=false, labelcol:="label")
     if sl2 then if not assigned Z`SL and #Z gt 0 then error "GL2/SL2 mismatch"; end if;
     else if assigned Z`SL then error "SL2/GL2 mismatch"; end if; end if;
-    r := colsplit(inrecs[1]);
+    if inrecs[1][1..5] ne "label" then
+        r := ["label","key","gens"]; first:=1;
+    else
+        r := colsplit(inrecs[1]); first:=2;
+    end if;
     labelcol := Index(r,labelcol); keycol := Index(r,"key"); genscol := Index(r,"gens"); if genscol eq 0 then genscol := Index(r,"subgroup"); end if;
     assert labelcol ne 0 and keycol ne 0 and genscol ne 0;
     Nstr := istr(N);
     makeval := makegroups select (sl2 select func<k,l,i,g|<k,SL2FromGenerators(l,i,g)>> else func<k,l,i,g|<k,GL2FromGenerators(l,i,g)>>) else func<k,l,i,g|[k,l,i,g]>;
-    for i:=2 to #inrecs do
+    for i:=first to #inrecs do
         r := colsplit(inrecs[i]); l := Split(r[labelcol],".");
         if N ne 0 and l[1] ne Nstr then continue; end if;
         k := atoi(r[keycol]); Z[k] := Append(getval(Z,k),makeval(r[labelcol],l[1],l[2],r[genscol]));
@@ -409,12 +413,16 @@ end intrinsic;
 function gl2finetab(inrecs : Z:=AssociativeArray(), N:=0, sl2:=false, makegroups:=false)
     if sl2 then if not assigned Z`SL and #Z gt 0 then error "GL2/SL2 mismatch"; end if;
     else if assigned Z`SL then error "SL2/GL2 mismatch"; end if; end if;
-    r := colsplit(inrecs[1]);
+    if inrecs[1][1..5] ne "label" then
+        r := ["label","gens"]; first:=1;
+    else
+        r := colsplit(inrecs[1]); first:=2;
+    end if;
     labelcol := Index(r,"label"); genscol := Index(r,"gens");
     assert labelcol ne 0 and genscol ne 0;
     Nstr := istr(N);
     makeval := makegroups select (sl2 select func<k,l,i,g|<k,SL2FromGenerators(l,i,g)>> else func<k,l,i,g|<k,GL2FromGenerators(l,i,g)>>) else func<k,l,i,g|[k,l,i,g]>;
-    for i:=2 to #inrecs do
+    for i:=first to #inrecs do
         r := colsplit(inrecs[i]); l := Split(r[labelcol],".");
         if N ne 0 and l[1] ne Nstr then continue; end if;
         k := GL2CoarseLabel(r[labelcol]);
