@@ -5,4 +5,5 @@
     genus1.m
     gl2base.m
     gl2points.m
+    gl2tab.m
 }
