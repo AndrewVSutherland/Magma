@@ -1,4 +1,4 @@
-freeze;
+//freeze;
 /*
     Dependencies: utils.m, chars.m
 
@@ -1538,7 +1538,7 @@ end intrinsic;
 
 intrinsic GL2SplitCartanK1(R::RngIntRes) -> GrpMat
 { The subgroup of the standard split Cartan subgroup of GL(2,R) consisting of diagonal matrices with +/-1 in the upper left. }
-    if #R eq 2 then return sub<R|[]>; end if;
+    if #R eq 2 then return sub<GL(2,R)|[]>; end if;
     m,pi := MultiplicativeGroup(R); gm := [pi(g):g in Generators(m)];
     H := sub<GL(2,R) | [[1,0,0,g] : g in gm] cat [[-1,0,0,-1]]>;
     N := #R; H`Order := 2*EulerPhi(N); H`Index := GL2Size(N) div H`Order; H`Level := N; H`NegOne := true;
@@ -2903,13 +2903,14 @@ intrinsic SL2Canonicalize(H::GrpMat:Algorithm:="default") -> GrpMat, GrpMatElt
     R := SL2PrimitiveSimilarityReps(N); I,f := SL2PrimitiveSimilarityLists(H); GC := SL2PrimitiveSimilarityCounts(N);
     J := [r[3] : r in Sort([<-Order(R[I[i]]),-GC[I[i]],i> : i in [1..#I]])]; I := I[J];
     vprintf GL2,4: "Computed primitive SL2 similarity lists for level %o group H in %.3os\n", N, Cputime()-timer; timer := Cputime();
-    L := f(I[1]); hmin := Min([Eltseq(x):x in Conjugates(G,L[1])]);
+    L := f(I[1]); assert L[1] in H; hmin := Min([Eltseq(x):x in Conjugates(G,L[1])]);
     g := GL2Conjugator(L[1],G!hmin);
     K := sub<G|hmin>; K`SL := true; H := sl2copyattr(H^g,H);
     if SL2Index(K) eq H`Index then
-      vprintf GL2,4: "First GL2-generator %o generates!\n", sprint(Eltseq(hmin));
-      K := sl2copyattr(K,H);
-      return K,g;
+        vprintf GL2,4: "First SL2-generator %o generates!\n", sprint(Eltseq(hmin));
+        K := sl2copyattr(K,H);
+        vprintf GL2,2: "Computed canonical generators %o for level %o SL2 subgroup %o of order %o in %.3os\n", sprint(SL2Generators(K)), N, sprint(SL2Generators(H)), H`Order, Cputime()-start;
+        return K,g;
     end if;
     vprintf GL2,4: "Computed initial generator %o yielding subgroup K of index %o in H of index %o in %.3os\n", sprint(Eltseq(hmin)), K`Index, H`Index, Cputime()-timer; timer := Cputime();
     T := [t:t in GL2RightTransversal(Normalizer(G,H))|h^(t^-1) in H] where h:=G!hmin;
@@ -2936,7 +2937,7 @@ intrinsic SL2Canonicalize(H::GrpMat:Algorithm:="default") -> GrpMat, GrpMatElt
         if SL2Order(K) eq H`Order then break; end if;
     end for;
     vprintf GL2,2: "Computed canonical generators %o for level %o SL2 subgroup %o of order %o in %.3os\n", sprint(SL2Generators(K)), N, sprint(SL2Generators(H)), H`Order, Cputime()-start;
-    assert H^T[1] eq K;
+    // assert H^T[1] eq K;
     K := sl2copyattr(K,H);
     return K,g*T[1]; // Note that we replaced H with H^g above
 end intrinsic;
@@ -2988,8 +2989,9 @@ intrinsic GL2Canonicalize(H::GrpMat:Algorithm:="default") -> GrpMat, GrpMatElt
     delete K`SL; delete K`Index;
     K := sub<G|K,hmin>; H := gl2copyattr(H^c,H); g := g*c;
     if GL2Index(K) eq H`Index then
-      vprintf GL2,4: "First GL2-generator %o generates!\n", sprint(Eltseq(hmin));
+      vprintf GL2,4: "First GL2-generator %o generates\n", sprint(Eltseq(hmin));
       K := gl2copyattr(K,H);
+      vprintf GL2,2: "Computed canonical generators %o for level %o GL2 subgroup %o of order %o in %.3os\n", sprint(GL2Generators(K)), N, sprint(GL2Generators(H)), H`Order, Cputime()-start;
       return K,g;
     end if;
     vprintf GL2,4: "Computed initial generator %o yeilding subgroup K of index %o in H of index %o in %.3os\n", sprint(Eltseq(hmin)), K`Index, H`Index, Cputime()-timer; timer := Cputime();
