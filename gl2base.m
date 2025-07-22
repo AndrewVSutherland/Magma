@@ -1,4 +1,4 @@
-//freeze;
+freeze;
 /*
     Dependencies: utils.m, chars.m
 
