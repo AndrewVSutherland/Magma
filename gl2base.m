@@ -1,4 +1,4 @@
-freeze;
+//freeze;
 /*
     Dependencies: utils.m, chars.m
 
@@ -1294,7 +1294,7 @@ intrinsic GL2AgreeableQuotientInvariants(H::GrpMat) -> SeqEnum[RngIntElt]
 end intrinsic;
 
 intrinsic GL2CuspOrbits(H::GrpMat:slow:=false,CH:=[]) -> RngIntElt
-{ Returns a sorted list of pairs [n,m] where m is the number of Galois orbits of cusps of size n. }
+{ Returns a sorted list of pairs [m,n] where n is the number of Galois orbits of cusps of size m (rational cusps are orbits of size 1). }
     N,H := GL2Level(GL2IncludeNegativeOne(H));
     if N eq 1 then return [[1,1]]; end if;
     GL2 := GL2Ambient(N);
