@@ -1,5 +1,6 @@
 {
     utils.m
+    polredabs.m
     chars.m
     genus2euler.m
     tracehash.m
@@ -9,4 +10,5 @@
     gl2base.m
     gl2points.m
     gl2tab.m
+    gl2lat.m
 }
