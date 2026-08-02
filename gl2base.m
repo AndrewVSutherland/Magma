@@ -774,7 +774,7 @@ end intrinsic;
 
 intrinsic PSL2Index(H::GrpMat) -> RngIntElt
 { Index of the image of H cap SL(2,Z/NZ) in PSL(2,Z/NZ). }
-    require assigned H`SL then return PSL2Index(SL2Intersection(H)); end if;
+    if not assigned H`SL then return PSL2Index(SL2Intersection(H)); end if;
     return SL2Index(SL2IncludeNegativeOne(H));
 end intrinsic;
 
