@@ -367,7 +367,14 @@ end intrinsic;
 
 intrinsic GL2Ambient(R::RngIntRes) -> GrpMat
 { Returns GL(2,R) with Order, Index, NegOne, Level attributes set. }
-    G := GL(2,R); G`Order := GL2Size(#R); G`NegOne := true; G`Index := 1; G`Level := 1; G`Genus := 0;
+    G := GL(2,R);
+    if IsFinite(R) and #R gt 2 then // trim a generator when we can
+        g := GeneratorsSequence(G);
+        g := [g[1]*g[#g]] cat g[2..#g-1];
+        H := sub<G|g>; assert H eq G;
+        G := H;        
+    end if;
+    G`Order := GL2Size(#R); G`NegOne := true; G`Index := 1; G`Level := 1; G`Genus := 0;
     return G;
 end intrinsic;
 
@@ -766,8 +773,8 @@ intrinsic SL2Index(H::GrpMat) -> RngIntElt
 end intrinsic;
 
 intrinsic PSL2Index(H::GrpMat) -> RngIntElt
-{ Index of H cap SL(2,Z/NZ) in SL(2,Z/NZ). }
-    require assigned H`SL: "H should be a subgroup of SL2 that is marked as a subgroup of SL2.";
+{ Index of the image of H cap SL(2,Z/NZ) in PSL(2,Z/NZ). }
+    require assigned H`SL then return PSL2Index(SL2Intersection(H)); end if;
     return SL2Index(SL2IncludeNegativeOne(H));
 end intrinsic;
 
@@ -986,6 +993,87 @@ function sl2permrepalg(H)
     return H`Order le 2^18 select "enum" else "cc";
 end function;
 
+// This can save a *lot* of time in extreme cases (more than 100x)
+intrinsic CosetActionViaIntermediate(G::Grp, K::Grp, H::Grp : verbose:=false) -> HomGrp
+{ Construct the coset action homomorphism G -> Sym(Index(G,H)) via an intermediate subgroup H <= K <= G, using the imprimitive decomposition.
+ Works best when [G:K] and [K:H] are much smaller than [G:H], and when G is constructed using a minimal list of generators.
+ The complexity is O(#Generators(G)*[G:H]), so still linear in [G:H], but much faster than CosetAction. }
+    require IsFinite(G) : "G must be finite.";
+
+    if verbose then t := Cputime(); end if;
+
+    m := Index(G,K); if m eq 1 then return CosetAction(G,H); end if;
+    r := Index(K,H); if r eq 1 then return CosetAction(G,H); end if;
+    n := m * r;
+
+    pi_GK := CosetAction(G, K);         // hom<G -> Sym(m)>
+    gens := GeneratorsSequence(G);      // generator sequence must match those of G when pi_GK was called (including order!)
+    s := #gens;
+
+    sigmas := [ pi_GK(g) : g in gens ];
+    sigmasInv := [ sigmas[i]^-1 : i in [1..s] ];
+    gensInv   := [ gens[i]^-1   : i in [1..s] ];
+
+    T := [ G!1 : i in [1..m] ];
+    visited := [ false : i in [1..m] ];
+    visited[1] := true; // T[1] = 1_G
+
+    // compute the transversal T using a BFS
+    Q := [ 1 ]; qi := 1;
+    while qi le #Q do
+        u := Q[qi]; qi +:= 1;
+        // step by generators and inverses (slight speedup)
+        for k in [1..s] do
+            v := u ^ sigmas[k];
+            if not visited[v] then
+                T[v] := T[u] * gens[k];
+                visited[v] := true;
+                Append(~Q, v);
+            end if;
+            v := u ^ sigmasInv[k];
+            if not visited[v] then
+                T[v] := T[u] * gensInv[k];
+                visited[v] := true;
+                Append(~Q, v);
+            end if;
+        end for;
+    end while;
+    require &and visited : "Failed to construct transversal for G/K (this should never happen).";
+    delete Q,visited;
+    Tinv := [ T[i]^-1 : i in [1..m] ];
+    if verbose then printf "phase 1 took %.3os\n", Cputime()-t; t:=Cputime(); end if;
+
+    pi_KH := CosetAction(K, H);
+    S := Sym(n);
+    images := [ S!1 : i in [1..s] ];
+    if verbose then printf "phase 2 took %.3os\n", Cputime()-t; t:=Cputime(); end if;
+
+    for k in [1..s] do
+        sigma := sigmas[k];
+        x := gens[k];
+
+        // For each block i, compute k_i(x) = T[i] * x * T[sigma(i)]^-1 ∈ K,
+        // then its image in Sym(r) via the pi_KH action.
+        basePerms := [ pi_KH(K!(T[i]*x*Tinv[i^sigma])) : i in [1..m] ];
+
+        // Now build the degree-n permutation for x:
+        img := [ 0 : t in [1..n] ];
+        for i in [1..m] do
+            b := i ^ sigma;                     // target block index
+            p := basePerms[i];                  // permutation of the r points within the block
+            for j in [1..r] do img[(i-1)*r + j] := (b-1)*r + j^p; end for;
+        end for;
+
+        images[k] := S!img;
+    end for;
+
+    // ---- Define the homomorphism ----
+    phi := hom< G -> S | images >;
+    if verbose then printf "phase 3 took %.3os\n", Cputime()-t; end if;
+    return phi;
+end intrinsic;
+
+
 intrinsic GL2PermutationRepresentation(H::GrpMat:noCosetAction:=false) -> Map
 { Given a subgroup H of G:=GL(2,Z/NZ), returns the group homomoprhism from G to the symmetric group of degree [G:H] given by the action of G on the right cosets of H. }
     require not assigned H`SL: "H should be a subgroup of GL(2,Z/NZ) that is not marked as a subgroup of SL(2,Z/NZ).";
@@ -1003,7 +1091,7 @@ intrinsic GL2PermutationRepresentation(H::GrpMat:noCosetAction:=false) -> Map
             We can thus compute the action of g on the coset Ha using the SL2-coset map for (H cap SL2) to compute the unique SL2-coset rep b for (H cap SL2) for which Hb = Hhag.
 
         This seems blindingly obvious once it is spelled out, but I occasionally have to remind myself why it works.
-        The reason it might not be obvious is that it implies that we can use the permutation given by [H\G] to efficiently compute the cardinality of the intersecion
+        The reason it might not be obvious is that it implies that we can use the permutation given by [H\G] to efficiently compute the cardinality of the intersection
         of (H cap SL2) with any GL2-conjugacy class in SL2 by computing #(g^G cap H) = #Fix(pi(g))*g^G / [G:H], where g is any GL2-conjugacy class rep in SL2
         (in other words, any similarity class rep with determinant one -- note that it is *much* easier to compute similarity class reps than it is to compute
         SL2-conjugacy class reps, and it is also easier to compute the perm rep [(H cap SL2)\SL2] than the perm rep [H\GL2], which is why this function is useful).
@@ -1298,27 +1386,40 @@ intrinsic GL2CuspOrbits(H::GrpMat:slow:=false,CH:=[]) -> RngIntElt
     N,H := GL2Level(GL2IncludeNegativeOne(H));
     if N eq 1 then return [[1,1]]; end if;
     GL2 := GL2Ambient(N);
-    if IsPrime(N) and GL2DeterminantIndex(H) eq 1 and not slow then
-        // For prime N and n properly dividing phi(N), the matrices T^a*d^n are all conjugate, allowing us to apply the optimization used in GL2RationalCuspCount,
-        // and we can handle d^n=1 but just counting cusps not in any of the orbits already counted (they must lie in cusp orbits of maximal size phi(N))
-        d := GL2Ambient(N)![PrimitiveRoot(N),0,0,1]; m := EulerPhi(N); c:=AssociativeArray(); D := [e:e in Divisors(m)|e lt m];
-        if #CH eq 0 then CH := GL2SimilarityCounts(H); end if; ind := GL2SimilarityClassIndexMap(N);
-        for e in D do c[e] := ExactQuotient(CH[ind(d^e)]*GL2Index(H),n) where n:=GL2SimilarityClassSize(d^e); end for;
-        C := [[e,ExactQuotient(&+[MoebiusMu(e div f)*c[f]:f in Divisors(e)],e)]:e in D]; C := [a:a in C|a[2] gt 0];
-        n := GL2CuspCount(H) - &+[ZZ|a[1]*a[2]:a in C];  assert n ge 0;
-        if n gt 0 then Append(~C,[m,ExactQuotient(n,m)]); end if;
-        return C;
+    r := PrimitiveRoot(N);
+    if r gt 0 and not slow then
+        idx := GL2Index(H); C := GL2SimilarityCounts(N); ind := GL2SimilarityClassIndexMap(N);
+        if #CH eq 0 then CH := GL2SimilarityCounts(H); end if;
+        m := EulerPhi(N);
+        d := GL2Ambient(N)![r,0,0,1]; m := EulerPhi(N); D := [e:e in Divisors(m)|e lt m];
+        c:=AssociativeArray();
+        if IsPrime(N)  then
+            // For prime N and fixed e properly dividing phi(N), the matrices T^a*d^e*T^b are all conjugate,
+            // This allows us to apply the optimization used in GL2RationalCuspCount,
+            // To handle d^e=1 we count cusps not in orbits already counted (they lie in cusp orbits of maximal size phi(N))
+            for e in D do c[e] := ExactQuotient(idx*CH[ind(d^e)],C[ind(d^e)]); end for;
+            M := [[e,ExactQuotient(&+[MoebiusMu(e div f)*c[f]:f in Divisors(e)],e)]:e in D]; M := [a:a in M|a[2] gt 0];
+            n := GL2CuspCount(H) - &+[ZZ|a[1]*a[2]:a in M];  assert n ge 0;
+            if n gt 0 then Append(~M,[m,ExactQuotient(n,m)]); end if;
+            return M;
+        else
+            // we could be more clever and use a weighted sum (which would need to depend on e and the parity of N)
+            // but this adds complexity and doesn't really save any time, since everything is precomputed
+            for e in D do c[e] := ExactQuotient(&+[ExactQuotient(idx*CH[i],C[i]) where i:=ind(d^e*GL2![1,n,0,1]) : n in [1..N]],N); end for;
+            M := [[e,ExactQuotient(&+[MoebiusMu(e div f)*c[f]:f in Divisors(e)],e)]:e in D]; M := [a:a in M|a[2] gt 0];
+            n := GL2CuspCount(H) - &+[ZZ|a[1]*a[2]:a in M];  assert n ge 0;
+            if n gt 0 then Append(~M,[m,ExactQuotient(n,m)]); end if;
+            return M;
+        end if;
     end if;
-    if PrimitiveRoot(N) gt 0 and not slow then
-        d := GL2Ambient(N)![PrimitiveRoot(N),0,0,1]; m := EulerPhi(N); c:=AssociativeArray(); D := [e:e in Divisors(m)|e lt m];
-        idx := GL2Index(H); C := GL2SimilarityCounts(N); if #CH eq 0 then CH := GL2SimilarityCounts(H); end if; ind := GL2SimilarityClassIndexMap(N);
-        for e in D do c[e] := ExactQuotient(&+[ExactQuotient(idx*CH[i],C[i]) where i:=ind(dd*GL2![1,n,0,1]) : n in [1..N]],N) where dd:=d^e; end for;
-        C := [[e,ExactQuotient(&+[MoebiusMu(e div f)*c[f]:f in Divisors(e)],e)]:e in D]; C := [a:a in C|a[2] gt 0];
-        n := GL2CuspCount(H) - &+[ZZ|a[1]*a[2]:a in C];  assert n ge 0;
-        if n gt 0 then Append(~C,[m,ExactQuotient(n,m)]); end if;
-        return C;
+    // TODO: extend this to other composite levels (and possibly move this into GL2PermutationRepresentation)
+    if N ge 16 and N eq 2^Valuation(N,2) and GL2Index(H) gt 1024 and not slow then
+        k := Ceiling(Valuation(N,2)/2); K := GL2Lift(GL2Project(H,2^k),N);
+        pi := CosetActionViaIntermediate(GL2,K,H);
+    else
+        pi := CosetAction(GL2,H);
     end if;
-    pi := CosetAction(GL2,H); O := Orbits(pi(sub<GL2|[1,1,0,1]>));
+    O := Orbits(pi(sub<GL2|[1,1,0,1]>));
     B := pi(sub<GL2|[[g[1][1],0,0,1]:g in Generators(GL1)]>) where GL1 := GL1Ambient(N);
     S := Set(O); M:={**};
     while not IsEmpty(S) do o := Random(S); oo := o^B; Include(~M,#oo); S diff:= Set(oo); end while;
@@ -1333,8 +1434,10 @@ intrinsic GL2CuspCount(H::GrpMat:slow:=false) -> RngIntElt
     SL2 := SL2Ambient(N);
     if slow then return di*#Orbits(CosetAction(SL2,H)(sub<SL2|[1,1,0,1]>)); end if;
     CH := SL2SimilarityCounts(H); C:=SL2SimilarityCounts(N); ind := SL2SimilarityClassIndexMap(N);
-    D := Divisors(N); g := SL2![1,1,0,1]; fix := [];
-    for d in D do fix[d] := (H`Index*CH[i]) div C[i] where i:=ind(g^d); end for;        // fix[d] = [SL2/H]^(g^d) = # fix points of any h in <g> of order N/d
+    D := Divisors(N); T := SL2![1,1,0,1]; fix := [];
+    // fix[d] = [SL2/H]^(T^d) = # fix points of any h in <T> of order N/d
+    // We compute fix[d] = chi_H(g) = #(g^G meet H)*[G:H]/#g^G with g=T^d.
+    for d in D do fix[d] := ExactQuotient(H`Index*CH[i],C[i]) where i:=ind(T^d); end for;
     return di*ExactQuotient(&+[EulerPhi(d)*fix[N div d]:d in D],N); // Apply Burnside to the phi(d) elements have order d|N
 end intrinsic;
 
@@ -1343,21 +1446,33 @@ intrinsic GL2RationalCuspCount(H::GrpMat:slow:=false,CH:=[]) -> RngIntElt
     N,H := GL2Level(GL2IncludeNegativeOne(H));
     if N eq 1 then return 1; end if;
     GL2 := GL2Ambient(N);
-    if IsOdd(N) and IsPrimePower(N) and not slow then
+    r := PrimitiveRoot(N);
+    if r gt 0 and not slow then
         /*
-            In this situation (Z/NZ)* is cyclic, generated by a primitive root r, and if we put d:=[r,0,0,1] and T:=[1,1,0,1], a coset orbit Hg,HgT,...,HgT^k
-            is d-stable if and only if the g-conjugate of T^a*d*T^b lies in H.  But the matrices T^a*d*T^b are all GL2-conjugate to d (this works for N odd and d a primitive root but not in general).
-            The problem then reduces to counting cosets fixed by d, which we compute using chi_H(d) = #(d^G meet H)*[G:H]/#d^G
+            When (Z/NZ)*=<r> is cyclic, if we put d:=[r,0,0,1] and T:=[1,1,0,1], an H\G T-orbit Hg,HgT,...,HgT^(N-1) is
+            equal to Hgd,HgdT,...,HgT^(N-1) iff Hgd = HgT^a for some a in [0..N-1],
+            equivalently, dT^-a is g-conjugate to an element of H for some a in [0..N-1].
+            For N an odd prime-power, the d*T^-a are all conjugate to d via some power of T, which makes it possible
+            to count cusp orbits fixed by d by instead counting H\G cosets fixed by d (a conjugacy class invaraint).
+            We use the perm character chi_H(g) = #(g^G meet H)*[G:H]/#g^G to count the fixed points of g in the perm-rep H\G.
+            For N twice an odd-power a similar approach works but now there are two conjugacy classes to consider
         */
-        return ExactQuotient(GL2SimilarityCount(H,d)*GL2Index(H),n) where n:=GL2SimilarityClassSize(d) where d:=GL2Ambient(N)![PrimitiveRoot(N),0,0,1];
+        i := GL2Index(H);
+        C := GL2SimilarityCounts(N); ind := GL2SimilarityClassIndexMap(N);
+        if #CH eq 0 then CH := GL2SimilarityCounts(H); end if;
+        d := GL2![r,0,0,1]; n:=C[ind(d)]; m:=CH[ind(d)];
+        if IsOdd(N) then return ExactQuotient(m*i,n); end if;
+        d2 := d*GL2![1,1,0,1]; n2 := C[ind(d2)]; m2 := CH[ind(d2)];
+        return ExactQuotient(ExactQuotient(m*i,n) + ExactQuotient(m2*i,n2), 2);
     end if;
-    if PrimitiveRoot(N) gt 0 and not slow then
-        idx := GL2Index(H); C := GL2SimilarityCounts(N); if #CH eq 0 then CH := GL2SimilarityCounts(H); end if; ind := GL2SimilarityClassIndexMap(N); d:=GL2![PrimitiveRoot(N),0,0,1];
-        return ExactQuotient(&+[ExactQuotient(idx*CH[i],C[i]) where i:=ind(d*GL2![1,n,0,1]) : n in [1..N]],N);
-    end if;
-    pi := CosetAction(GL2,H); O := Orbits(pi(sub<GL2|[1,1,0,1]>));
-    gg := [pi(GL2![g[1][1],0,0,1]):g in Generators(GL1)] where GL1:=GL1Ambient(N);
-    return #[o:o in O|&and[o^g eq o:g in gg]];
+    // revert to naive implementation when GL1 is non-cyclic
+    pi := CosetAction(GL2,H);
+    O := Orbits(pi(sub<GL2|[1,1,0,1]>));
+    B := pi(sub<GL2|[[g[1][1],0,0,1]:g in Generators(GL1)]>) where GL1 := GL1Ambient(N);
+    S := Set(O); cnt := 0;
+    // this is faster than simply counting elements of O fixed by B because non-fixed orbits let us eleminate a bunch at once
+    while not IsEmpty(S) do o := Random(S); oo := o^B; if #oo eq 1 then cnt +:=1; end if; S diff:= Set(oo); end while;
+    return cnt;
 end intrinsic;
 
 intrinsic GL2RationalCuspCount(H::GrpMat, q::RngIntElt:slow:=false,CH:=[]) -> RngIntElt
@@ -1415,12 +1530,12 @@ end intrinsic;
 intrinsic GL2CuspWidths(H::GrpMat:slow:=false) -> SeqEnum[SeqEnum[RngIntElt]]
 { Returns a list of pairs of integers [w,n] where n is the number of cusps of width w. }
     N,H := SL2Level(GL2IncludeNegativeOne(H));
-    if N eq 1 then return 1; end if;
+    if N eq 1 then return [[1,1]]; end if;
     SL2 := SL2Ambient(N);
     if slow then return [[r[1],r[2]]:r in Eltseq({*#o:o in oo*})] where oo := Orbits(pi(sub<SL2|[1,1,0,1]>)) where pi := CosetAction(SL2,H); end if;
     CH := SL2SimilarityCounts(H); C:=SL2SimilarityCounts(N); ind := SL2SimilarityClassIndexMap(N);
     D := Divisors(N); fix := []; g := SL2![1,1,0,1];
-    for d in D do fix[d] := (H`Index*CH[i]) div C[i] where i:=ind(g^d); end for;  // fix[d] = [SL2/H]^(g^d) = # fix points of any h in <g> of order N/d
+    for d in D do fix[d] := ExactQuotient(H`Index*CH[i],C[i]) where i:=ind(g^d); end for;  // fix[d] = [SL2/H]^(g^d) = # fix points of any h in <g> of order N/d
     F := [&+[MoebiusMu(e)*fix[d div e]:e in Divisors(d)] div d : d in D];         // F[d] = # g-orbits of size d = (# points fixed by g^d but not g^e for any e|d) / d
     return [[D[i],F[i]]:i in [1..#D]|F[i] gt 0];
 end intrinsic;
@@ -2477,7 +2592,7 @@ intrinsic GL2SimilarityCounts(H::GrpMat:Algorithm:="default",Primitive:=false,Sp
         assert #C eq #S;
         n := GL2Index(H);
         // There is a very difficult to reproduce magma bug (as of 2.27-8) that will occasionally cause ExactQuotient to fail due to a bogus map returned by CosetAction
-        // Re-executing the exact same line will often fix the problem
+        // Re-executing the exact same line will usually fix the problem (the possibility of silent errors not caught by the divisiion failure is worrying...)
         try
             pi := Algorithm eq "action" select CosetAction(GL2Ambient(N),H) else GL2PermutationRepresentation(H);
             c := [#Fix(pi(S[i])): i in [1..#S]];
