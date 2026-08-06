@@ -493,7 +493,7 @@ intrinsic GL2QObstructions(H::GrpMat:g:=-1,B:=0,T:=[],C:=[]) -> SeqEnum[RngIntEl
     return X cat [p : p in P | C[p mod N] eq 0 and &and[not inv(G!a) in S : a in GL2FrobeniusMatrices(p)]]  where inv := GL2SimilarityClassMap(N);
 end intrinsic;
 
-intrinsic GL2GonalityBounds(H::GrpMat,ratcuspcnts:=[],ratpts:=-2,g:=-1,psl2index:=-1) -> SeqEnum[RngIntElt], RngIntElt
+intrinsic GL2GonalityBounds(H::GrpMat:ratcuspcnts:=[],ratpts:=-2,g:=-1,psl2index:=-1) -> SeqEnum[RngIntElt], RngIntElt
 { Returns a quadruple listing lower and upper bounds on the Q-gonality of X_H followed by lower and upper bounds on the Qbar-gonality (the genus > 1 the lower bounds for Q and Qbar will be the same).
   The second return value is the prime power used to prove lower bounds via point-counting (or 0 if not relevant).
   Except for special handling of genus 0,1,2 curves, this algorithm computes gonality upper bounds as the minimum of the degree of the map to X(1) and either g+1 or 2*g-1 (depending on whether rational points are known or not, for qbar they always are),
@@ -513,7 +513,7 @@ intrinsic GL2GonalityBounds(H::GrpMat,ratcuspcnts:=[],ratpts:=-2,g:=-1,psl2index
     end if;
     if g eq 0 then return [ratpts eq 0 select 2 else 1,ratpts gt 0 select 1 else 2,1,1], 0; end if;
     if (g eq 1 and ratpts gt 0) or g eq 2 then return [2,2,2,2], 0; end if;
-    lbbar := Max(2,Ceil(325*psl2index/32768)); // Abramovich bound lower bound on C-gonality = Qbar-gonality <= Q-gonality using strict Kim-Sarnak bound of 975/4096 for Selberg eigenvalue bound (https://doi.org/10.1090/S0894-0347-02-00410-1)
+    lbbar := Max(2,Ceiling(325*psl2index/32768)); // Abramovich bound lower bound on C-gonality = Qbar-gonality <= Q-gonality using strict Kim-Sarnak bound of 975/4096 for Selberg eigenvalue bound (https://doi.org/10.1090/S0894-0347-02-00410-1)
     ub := GL2Index(H); // degree of j-map to X(1) = P^1 is always an upper bound
     if ratpts gt 0 then ub := Min(ub,g gt 1 select g else g+1); elif g gt 1 then ub := Min(ub,2*g-2); end if;
     if lbbar eq ub then return [lbbar,ub,lbbar,ub], 0; end if;
