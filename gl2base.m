@@ -1277,7 +1277,6 @@ intrinsic GL2ContainsComplexConjugation(H::GrpMat:CH:=[]) -> BoolElt
     if i le 1024 then pi := GL2PermutationRepresentation(H); return #Fix(pi(G![1,0,0,-1])) gt 0 or #Fix(pi(G![1,1,0,-1])) gt 0; end if;
     cc := [[1,0,0,-1],[-1,0,0,1],[1,-1,0,-1],[1,1,0,-1],[-1,0,1,1],[-1,1,0,1],[-1,0,-1,1],[1,0,1,-1],[-1,-1,0,1],[1,0,-1,-1],[0,-1,-1,0],[0,1,1,0]];
     if &or[G!c in H:c in cc] then return true; end if;
-    if #cc gt 0 then return true; end if;
     if N ne 2 and not IsEven(#GL(1,R) div GL2DeterminantIndex(H)) then return false; end if;
     Z := Conjugates(G,G![1,0,0,-1]);
     for z in Z do if z in H then return true,z; end if; end for;
