@@ -9,6 +9,9 @@
 # AND contains no Magma error banner ("User error"/"Runtime error"/"Internal
 # error") — identifier errors do not halt magma -b, so the sentinel alone
 # could mask a partially-skipped test file.
+# A test that produces no result line at all (worker killed, or xargs
+# aborted before dispatching it) is reported MISSING and counted as a
+# failure — absence of a FAIL line is not evidence of a pass.
 # Exit status is nonzero if any test fails.
 
 set -u
@@ -48,6 +51,7 @@ run_one() {
 export -f run_one
 
 RESULTS="$(printf '%s\n' "${TESTS[@]}" | xargs -P "$JOBS" -I{} bash -c 'run_one "$@"' _ {})"
+XSTATUS=$?
 
 echo
 echo "==================== TEST SUMMARY ===================="
@@ -57,7 +61,22 @@ while read -r status secs name; do
   printf "%-28s %-6s %8s\n" "$name" "$status" "$secs"
   [ "$status" = "FAIL" ] && FAILED=$((FAILED+1))
 done <<< "$(echo "$RESULTS" | sort -k3)"
+# Tests with no result line (worker killed before reporting, or never
+# dispatched because xargs aborted) would otherwise be counted as passes.
+MISSING=0
+for t in "${TESTS[@]}"; do
+  n="$(basename "$t")"
+  grep -qF " $n" <<< "$RESULTS" || {
+    printf "%-28s %-6s %8s\n" "$n" "MISSING" "-"
+    MISSING=$((MISSING+1))
+  }
+done
+FAILED=$((FAILED+MISSING))
 echo "======================================================="
+if [ "$XSTATUS" -ne 0 ] && [ "$FAILED" -eq 0 ]; then
+  echo "WARNING: test harness (xargs) exited with status $XSTATUS despite all results present" >&2
+  FAILED=1
+fi
 TOTAL=${#TESTS[@]}
 echo "$((TOTAL-FAILED))/$TOTAL passed"
 if [ "$FAILED" -gt 0 ]; then
