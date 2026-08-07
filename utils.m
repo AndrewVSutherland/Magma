@@ -1,6 +1,6 @@
 //freeze;
 /*
-    General purpose utilities (often things I wished Magma supported directly) and aliases/wrappers for Magma functions to make them easer for me to use and/or remember.
+    General purpose utilities (often things I wished Magma supported directly) and aliases/wrappers for Magma functions to make them easier for me to use and/or remember.
 
     Copyright (c) Andrew V. Sutherland, 2019-2024.  See License file for details on copying and usage.
 */
@@ -38,7 +38,7 @@ end intrinsic;
 intrinsic PlaneCurve(c::SeqEnum) -> CrvPln
 { The curve in P^2 defined by f(x,y,z) = 0, where f is specified as a list of binom(d+2,2) coefficients (in lex order matching MonomialsOfDegree so that c eq Coefficients(PlaneCurve(c)) holds). }
     d := Floor(Sqrt(2*#c))-1;
-    require d gt 1 and #c  eq Binomial(d+2,2): "Then length of the input must be of the form binom(d+2,2) with d > 1.";
+    require d gt 1 and #c  eq Binomial(d+2,2): "The length of the input must be of the form binom(d+2,2) with d > 1.";
     M := MonomialsOfDegree(PolynomialRing(Parent(c[1]),3),d);  assert #M eq #c;
     return PlaneCurve(&+[c[i]*M[i]:i in [1..#c]]);
 end intrinsic;
@@ -51,9 +51,8 @@ end intrinsic;
 intrinsic ReplaceCharacter(s::MonStgElt,c::MonStgElt,d::MonStgElt) -> MonStgElt
 { Efficiently replace every occurrence of the character c in s with the string d (c must be a single character but d need not be). This should be used as an alternative to SubstituteString, which scales non-linearly. }
     require #c eq 1: "The second parameter must be a single character (string of length 1).";
-    t := Split(s,c:IncludeEmpty);
-    if s[#s] eq c then Append(~t,""); end if; // add empty string at the end which Split omits
-    return Join(t,d);
+    if #s eq 0 then return s; end if;
+    return Join(Split(s,c:IncludeEmpty),d); // Split with IncludeEmpty includes empty strings at the end (as of Magma 2.29)
 end intrinsic;
 
 intrinsic ReplaceString(s::MonStgElt,c::MonStgElt,d::MonStgElt) -> MonStgElt
@@ -98,8 +97,8 @@ intrinsic PySplit(s::MonStgElt, sep::MonStgElt : limit:=-1) -> SeqEnum[MonStgElt
 end intrinsic;
 
 intrinsic split(s::MonStgElt,d::MonStgElt) -> SeqEnum[MonStgElt]
-{ Splits the string s using the delimter d, including empty and trailing elements (equivalent to python r.split(d) in python). }
-    return Split(s,d:IncludeEmpty) cat (s[#s] eq d select [""] else []);
+{ Splits the string s using the delimiter d, including empty and trailing elements (equivalent to python r.split(d) in python). }
+    return #s eq 0 select [""] else Split(s,d:IncludeEmpty); // Split with IncludeEmpty includes empty strings at the end (as of Magma 2.29)
 end intrinsic;
 
 intrinsic getrecs(filename::MonStgElt:Delimiter:=":") -> SeqEnum[SeqEnum[MonStgElt]]
@@ -168,12 +167,12 @@ intrinsic prod(v::ModTupRngElt) -> .
 end intrinsic;
 
 intrinsic strip(X::MonStgElt) -> MonStgElt
-{ Strips spaces and carraige returns from string; used to be faster than StripWhiteSpace, now that StripWhiteSpace is faster we just call it. }
+{ Strips spaces and carriage returns from string; used to be faster than StripWhiteSpace, now that StripWhiteSpace is faster we just call it. }
     return StripWhiteSpace(X);
 end intrinsic;
 
 intrinsic sprint(X::.) -> MonStgElt
-{ Sprints object X with spaces and carraige returns stripped. }
+{ Sprints object X with spaces and carriage returns stripped. }
     if Type(X) eq Assoc then return Join(Sort([ $$(k) cat "=" cat $$(X[k]) : k in Keys(X)]),":"); end if;
     return strip(Sprintf("%o",X));
 end intrinsic;
@@ -188,7 +187,7 @@ intrinsic itoa(n::RngIntElt) -> MonStgElt
     return IntegerToString(n);
 end intrinsic;
 
-intrinsic StringToReal(s::MonStgElt) -> RngIntElt
+intrinsic StringToReal(s::MonStgElt) -> FldReElt
 { Converts a decimal string (like 123.456 or 1.23456e40 or 1.23456e-10) to a real number at default precision. }
     if #s eq 0 then return 0.0; end if;
     if "e" in s then
@@ -202,7 +201,7 @@ intrinsic StringToReal(s::MonStgElt) -> RngIntElt
     return #t eq 1 select RealField()!n else RealField()!n + s*RealField()!StringToInteger(t[2])/10^#t[2];
 end intrinsic;
 
-intrinsic atof (s::MonStgElt) -> RngIntElt
+intrinsic atof (s::MonStgElt) -> FldReElt
 { Converts a decimal string (like "123.456") to a real number at default precision. }
     return StringToReal(s);
 end intrinsic;
@@ -237,12 +236,12 @@ intrinsic iitoa(a::SeqEnum[RngIntElt]) -> MonStgElt
     return "[" cat Join([IntegerToString(n) : n in a],",") cat "]";
 end intrinsic;
 
-intrinsic atoiii(s::MonStgElt) -> SeqEnum[RngIntElt]
+intrinsic atoiii(s::MonStgElt) -> SeqEnum[SeqEnum[RngIntElt]]
 { Converts a string to a sequence of sequences of integers. }
     t := strip(s);
     if t eq "[]" then return []; end if;
     if t eq "[[]]" then return [[Integers()|]]; end if;
-    assert #t gt 4;
+    assert #t ge 4;
     if t[1..2] eq "[<" and t[#t-1..#t] eq ">]" then
         r := Split(t[2..#t-1],"<");
         return [[Integers()|StringToInteger(n):n in Split(a[1] eq ">" select "" else Split(a,">")[1],",")]:a in r];
@@ -254,14 +253,14 @@ intrinsic atoiii(s::MonStgElt) -> SeqEnum[RngIntElt]
     end if;
 end intrinsic;
 
-intrinsic atoiiii(s::MonStgElt) -> SeqEnum[RngIntElt]
+intrinsic atoiiii(s::MonStgElt) -> SeqEnum[SeqEnum[SeqEnum[RngIntElt]]]
 { Converts a string to a sequence of sequences of sequences of integers. }
     t := strip(s);
     if t eq "[]" then return []; end if;
     if t eq "[[]]" then return [[Integers()|]]; end if;
     if t eq "[[[]]]" then return [[[Integers()|]]]; end if;
     assert #t gt 5 and t[1..3] eq "[[[" and t[#t-2..#t] eq "]]]";
-    s := s[2..#s-1];
+    s := t[2..#t-1]; // parse the whitespace-stripped string (the delimiter scan below assumes no whitespace)
     a := [];
     while true do
         i := Index(s,"]],[[");
@@ -272,7 +271,7 @@ intrinsic atoiiii(s::MonStgElt) -> SeqEnum[RngIntElt]
     return a;
 end intrinsic;
 
-intrinsic StringToRationalArray(s::MonStgElt) -> SeqEnum[RatFldElt]
+intrinsic StringToRationalArray(s::MonStgElt) -> SeqEnum[FldRatElt]
 { Given string representing a sequence of rational numbers, returns the sequence (faster and safer than eval). }
     if s eq "[]" then return []; end if;
     t := strip(s);
@@ -280,7 +279,7 @@ intrinsic StringToRationalArray(s::MonStgElt) -> SeqEnum[RatFldElt]
     return [StringToRational(n):n in Split(t[2..#t-1],",")];
 end intrinsic;
 
-intrinsic StringToRealArray(s::MonStgElt) -> SeqEnum[RatFldElt]
+intrinsic StringToRealArray(s::MonStgElt) -> SeqEnum[FldReElt]
 { Given string representing a sequence of real numbers, returns the sequence (faster and safer than eval). }
     if s eq "[]" then return []; end if;
     t := strip(s);
@@ -288,12 +287,12 @@ intrinsic StringToRealArray(s::MonStgElt) -> SeqEnum[RatFldElt]
     return [atof(n):n in Split(t[2..#t-1],",")];
 end intrinsic;
 
-intrinsic atoff(s::MonStgElt) -> SeqEnum[RngIntElt]
+intrinsic atoff(s::MonStgElt) -> SeqEnum[FldReElt]
 { Converts a string to a sequence of reals (alias for StringToRealArray). }
     return StringToRealArray(s);
 end intrinsic;
 
-intrinsic atofff(s::MonStgElt) -> SeqEnum[RngIntElt]
+intrinsic atofff(s::MonStgElt) -> SeqEnum[SeqEnum[FldReElt]]
 { Converts a string to a sequence of sequences of real numbers. }
     t := strip(s);
     if t eq "[]" then return []; end if;
@@ -303,8 +302,8 @@ intrinsic atofff(s::MonStgElt) -> SeqEnum[RngIntElt]
     return [[RealField()|StringToReal(n):n in Split(a[1] eq "]" select "" else Split(a,"]")[1],",")]:a in r];
 end intrinsic;
 
-intrinsic goodp(f::RngUPolElt,p::RngIntElt) -> RngIntElt
-{ Returns true if the specified polynomial is square free modulo p (without computing the discrimnant of f). }
+intrinsic goodp(f::RngUPolElt,p::RngIntElt) -> BoolElt
+{ Returns true if the specified polynomial is square free modulo p (without computing the discriminant of f). }
     return Discriminant(PolynomialRing(GF(p))!f) ne 0;
 end intrinsic;
 
@@ -390,7 +389,8 @@ end intrinsic;
 
 intrinsic getval(X::Any,k::Any:missing:=[]) -> Any
 { Returns X[k] if it is defined and [] (or whatever the optional argument missing is set to) otherwise (analog of the get method in Python). }
-    return b select v else missing where b,v := IsDefined(X,k);
+    if Type(X) eq Assoc then return b select v else missing where b,v := IsDefined(X,k); end if;
+    return IsDefined(X,k) select X[k] else missing; // IsDefined only returns a second value for associative arrays
 end intrinsic;
 
 intrinsic IndexFibers (S::SeqEnum, f::UserProgram : Unique:=false, Project:=false) -> Assoc
@@ -526,7 +526,7 @@ end intrinsic;
 
 intrinsic HurwitzClassNumber(N::RngIntElt) -> FldRatElt
 { The Hurwitz class number of positive definite binary quadratic forms of discriminant -N with each class C counted with multiplicity 1/#Aut(C), extended by Zagier to H(0)=-1/12 and H(-u^2)=-u/2, with H(-n) = 0 for all nonsquare n>0. }
-    if N eq 0 then return -1/12; end if; if N lt 0 then b,u:=IsSquare(N); return b select -u/2 else 0;  end if;
+    if N eq 0 then return -1/12; end if; if N lt 0 then b,u:=IsSquare(-N); return b select -u/2 else 0;  end if;
     if not N mod 4 in [0,3] then return 0; end if;
     D := FundamentalDiscriminant(-N); f := Integers()!Sqrt(-N/D); w := D lt -4 select 1 else (D lt -3 select 2 else 3);
     return ClassNumber(D)/w * &+[MoebiusMu(d)*KroneckerSymbol(D,d)*SumOfDivisors(f div d):d in Divisors(f)];
@@ -543,7 +543,7 @@ end intrinsic;
 
 intrinsic split(f::RngUPolElt, p::RngIntElt) -> SetMulti
 { The multiset of pairs <d,e> where d is the residue field degree and e is the ramification index of the primes above p in the number field defined by the monic irreducible polynomial f. }
-    require IsMonic(f) and IsIrreducible(f): "The polynomial f must be irreducible.";
+    require IsMonic(f) and IsIrreducible(f): "The polynomial f must be monic and irreducible.";
     require IsPrime(p): "p must be a rational prime.";
     s := Pipe(Sprintf("sage -c \"load('/home/drew/Dropbox/magma/split.py'); print(split(%o,%o))\"",Coefficients(f),p),"");
     try
@@ -592,13 +592,13 @@ intrinsic Log (a::RngIntResElt, b::RngIntResElt) -> RngIntElt
 end intrinsic; 
 
 intrinsic MinimalContractions(p::SetMulti[RngIntElt]) -> SetEnum[SetMulti[RngIntElt]]
-{ Given a multiset p of integers representing a partititon of n with k blocks, returns the set of partitions of n with k-1 blocks of which p is a refinement. }
+{ Given a multiset p of integers representing a partition of n with k blocks, returns the set of partitions of n with k-1 blocks of which p is a refinement. }
     if #p le 1 then return {Parent(p)|}; end if;
     return {Include(Exclude(Exclude(p,a),b),a+b):a,b in Set(p)|a ne b or Multiplicity(p,a) gt 1};
 end intrinsic;
 
 intrinsic Contractions(p::SetMulti[RngIntElt],k::RngIntElt) ->  SetEnum[SetMulti[RngIntElt]]
-{ Given a multiset p of integers representing a partititon of n, returns the set of partitions of n with k blocks of which p is a refinement. }
+{ Given a multiset p of integers representing a partition of n, returns the set of partitions of n with k blocks of which p is a refinement. }
     if #p lt k then return {}; end if;
     if #p eq k then return {p}; end if;
     P := {p};
@@ -607,14 +607,14 @@ intrinsic Contractions(p::SetMulti[RngIntElt],k::RngIntElt) ->  SetEnum[SetMulti
 end intrinsic;
 
 intrinsic Contractions(p::SetMulti[RngIntElt]) ->  SetEnum[SetMulti[RngIntElt]]
-{ Given a multiset p of integers representing a partititon of n, returns the set of partitions of n of which p is a refinement. }
+{ Given a multiset p of integers representing a partition of n, returns the set of partitions of n of which p is a refinement. }
     P := {p}; Q := P;
     for i:=1 to #p-1 do Q := &join[MinimalContractions(p):p in Q]; P join:= Q; end for;
     return P;
 end intrinsic;
 
 intrinsic CommonContractions(S::SeqEnum[SetMulti[RngIntElt]]) -> SetEnum[SetMulti[RngIntElt]]
-{ Given a sequence of multisets p of integers representing a partititon of n, returns the set of partitions of n that are refined by every element of S. }
+{ Given a sequence of multisets p of integers representing a partition of n, returns the set of partitions of n that are refined by every element of S. }
     require #{&+p:p in S} eq 1: "Incompatible partitions.";
     return &meet[Contractions(p):p in S];
 end intrinsic;
@@ -625,7 +625,7 @@ intrinsic MinimalCommonContractions(S::SeqEnum[SetMulti[RngIntElt]]) -> SetEnum[
     require #{&+p:p in S} eq 1: "Incompatible partitions.";
     S := Sort(S,func<a,b|#a-#b>);
     k := #S[1];
-    if k eq 1 then return S[1]; end if;
+    if k eq 1 then return {S[1]}; end if;
     P := {S[1]};
     for i:=2 to #S do
         Q := Contractions(S[i],k);
@@ -681,7 +681,7 @@ intrinsic IsRefinement(p::SetMulti[RngIntElt],q::SetMulti[RngIntElt]) -> BoolElt
 end intrinsic;
 */
 
-intrinsic C4C6Invariants(E::CrvEll[FldRat]) -> RngInt, RngInt
+intrinsic C4C6Invariants(E::CrvEll[FldRat]) -> RngIntElt, RngIntElt
 { Returns the c4 and c6 invariants of the specified elliptic curve E/Q (assumes E is defined by an integral model). }
     a := Coefficients(E);
     b2 := a[1]^2+4*a[2];
@@ -735,7 +735,7 @@ intrinsic WriteStderr(e::Err)
 end intrinsic;
 
 intrinsic Coefficients(C::CrvHyp) -> SeqEnum
-{ Returns [Coefficients(f),Coefficients(h)] for the hyperelliptic curve y^+h(x)y = f(x). }
+{ Returns [Coefficients(f),Coefficients(h)] for the hyperelliptic curve y^2+h(x)y = f(x). }
     return [Coefficients(f),Coefficients(h)] where f,h := HyperellipticPolynomials(C);
 end intrinsic;
 
@@ -749,12 +749,12 @@ intrinsic Coefficients(C::CrvPln) -> SeqEnum
 end intrinsic;
 
 intrinsic CoefficientString(C::Crv) -> SeqEnum
-{ Returns a string encoding the cofficients of the curve C. }
+{ Returns a string encoding the coefficients of the curve C. }
     return sprint(Coefficients(C));
 end intrinsic;
 
 intrinsic facpat(f::RngUPolElt:SquareFree:=false) -> SetMulti[RngIntElt]
-{ Returns the factorization pattern of the univariate polynomial f(x) (specificed by its coefficients). }
+{ Returns the factorization pattern of the univariate polynomial f(x). }
     if IsFinite(BaseRing(f)) then
         return Degree(f) le 0 select {**} else (SquareFree select {* a[1]^^(Degree(a[2]) div a[1]) : a in DistinctDegreeFactorization(f) *}
                                           else &join[{* a[1]^^(Degree(a[2]) div a[1]) : a in DistinctDegreeFactorization(b[1]) *}: b in SquarefreeFactorization(f)]);
@@ -764,26 +764,25 @@ intrinsic facpat(f::RngUPolElt:SquareFree:=false) -> SetMulti[RngIntElt]
 end intrinsic;
 
 intrinsic facpat(f::SeqEnum[RngIntElt]:SquareFree:=false) -> SetMulti[RngIntElt]
-{ Returns the factorization pattern of the univariate polynomial f(x) (specificed by its coefficients). }
+{ Returns the factorization pattern of the univariate polynomial f(x) (specified by its coefficients). }
     return facpat(PolynomialRing(Integers())!f:SquareFree:=SquareFree);
 end intrinsic;
 
 intrinsic facpat(f::RngUPolElt, p::RngIntElt:SquareFree:=false) -> SetMulti[RngIntElt]
-{ Returns the factorization pattern of the univariate polynomial f(x) modulo p (specificed by its coefficients). }
+{ Returns the factorization pattern of the univariate polynomial f(x) modulo p. }
     return facpat(ChangeRing(f,GF(p)):SquareFree:=SquareFree);
 end intrinsic;
 
 intrinsic facpat(f::SeqEnum[RngIntElt], p::RngIntElt:SquareFree:=false) -> SetMulti[RngIntElt]
-{ Returns the factorization pattern of the univariate polynomial f(x) (specificed by its coefficients). }
+{ Returns the factorization pattern of the univariate polynomial f(x) modulo p (specified by its coefficients). }
     return facpat(PolynomialRing(GF(p))!f:SquareFree:=SquareFree);
 end intrinsic;
 
 intrinsic EasyFactorization(n::RngIntElt:TrialDivisionLimit:=2^20,ECMLimit:=1000,PrimeLimit:=200,mLimit:=40,nECMLimit:=800,nLimit:=4000) -> RngIntEltFact, RngIntElt
-{ Attempts to factor the specified nonzero integer n using a bounded amount of effort by setting ECMLimit to a fixed value (default is 1000) and MPQSLimit:=0, and bounding the size of primes allowed in the factorization (default is 100 decimal digits) and the size of the input integer n (default is 1000 decimal digits).
-  If succesful the full (provably correct) factorization is returned, followed by the sign; otherwise a (provably correct) partial factorization and zero are returned. }
+{ Attempts to factor the specified nonzero integer n using a bounded amount of effort by setting ECMLimit to a fixed value (default is 1000) and MPQSLimit:=0, and bounding the size of primes allowed in the factorization (default is 200 decimal digits) and the size of the input integer n (default is 4000 decimal digits).
+  If successful the full (provably correct) factorization is returned, followed by the sign; otherwise a (provably correct) partial factorization and zero are returned. }
+    require n ne 0: "Input must be nonzero";
     if Abs(n) le 10^mLimit then return Factorization(n), Sign(n); end if;
-    if Abs(n) eq 1 then return [], n; end if;
-    require Abs(n) gt 1: "Input must be nonzero";
     d := Log(10,Abs(n));
     if d gt nLimit then return [],0; end if;
     P,s,E := Factorization(n:TrialDivisionLimit:=TrialDivisionLimit,ECMLimit:=d gt nECMLimit select 0 else ECMLimit,MPQSLimit:=0,Proof:=false);
@@ -807,10 +806,10 @@ intrinsic EasyFactorization(n::RngIntElt:TrialDivisionLimit:=2^20,ECMLimit:=1000
     return P,s;
 end intrinsic;
 
-intrinsic PrimeDivisors(S::SeqEnum[RngIntElt] : AllowComposites:=false) -> SeqEnum[RngIntElt], SeqEnum[RngIntElt]
-{ Given a sequence of integers S, returns a sequence primes optionally followed by a sequence of composites,
-  such that the elements in the two lists together form a factor basis for S: every element in the lists divides an element of s, no two have a common factor,
-  and every element of s is a product of powers of elements in these lists.  When composites are allowed EasyFactorization will be used to avoid expensive factorizations. }
+intrinsic PrimeDivisors(S::SeqEnum[RngIntElt] : AllowComposites:=false) -> SeqEnum[RngIntElt], BoolElt
+{ Given a sequence of integers S, returns a sorted sequence of pairwise coprime integers (all prime unless AllowComposites is set) forming a factor basis for S,
+  followed by a boolean that is true if every entry is prime: every element in the list divides an element of S, no two have a common factor,
+  and every element of S is (up to sign) a product of powers of elements in this list.  When composites are allowed EasyFactorization will be used to avoid expensive factorizations. }
     S := CoprimeBasis([Abs(n):n in S|Abs(n) gt 1]);
     S := [s[1]:s in S];
     if not AllowComposites then return Sort(&cat[PrimeDivisors(n):n in S]), true; end if;
@@ -828,7 +827,7 @@ intrinsic PrimeDivisors(S::SeqEnum[RngIntElt] : AllowComposites:=false) -> SeqEn
 end intrinsic;
 
 intrinsic Valuation(r::FldRatElt,p::RngIntElt,isprime::BoolElt) -> RngIntElt
-{ Given a rational number r and a positive integer p returns the least integer n such the denominator of r/p^n is coprime to p.
+{ Given a rational number r and a positive integer p returns the greatest integer n such that the denominator of r/p^n is coprime to p.
   When isprime is true this function computes the p-adic valuation using Valuation(r,p). }
     if r eq 0 or isprime then return Valuation(r,p); end if;
     n := 0;
@@ -839,9 +838,9 @@ intrinsic Valuation(r::FldRatElt,p::RngIntElt,isprime::BoolElt) -> RngIntElt
 end intrinsic;
 
 intrinsic NormalizedProjectiveInvariants (v::SeqEnum[FldRatElt], w::SeqEnum[RngIntElt] : Easy:=false) -> SeqEnum, FldRatElt, BoolElt
-{ Given a list of rational numbers v and a corresponding positive integer weights w, returns a list of integers z and a nonzero rational number r such that z[i] = v[i]*r^w[i] for all i.
+{ Given a list of rational numbers v and a corresponding list of positive integer weights w, returns a list of integers z and a nonzero rational number r such that z[i] = v[i]*r^-w[i] for all i.
   The Easy parameter can be used to avoid hard-to-factor integers.
-  The third return value indicates whether the returned vector z is gauranteed to be minimal (it may be false if Easy is set). }
+  The third return value indicates whether the returned vector z is guaranteed to be minimal (it may be false if Easy is set). }
     require #v eq #w: "The sequences v and w  must have the same length.";
     require &or[c ne 0:c in v]: "At least one entry of v must be nonzero.";
     require &and[c gt 0: c in w]: "The weights must be positive.";
@@ -860,23 +859,24 @@ intrinsic NormalizedIgusaClebschInvariants (C::CrvHyp : Easy:=false) -> SeqEnum
         if #F eq 2 then return inv; end if;
         p := #F;
         ZZ := Integers(); R<t> := PolynomialRing(F);
+        // the Igusa-Clebsch invariants [I2,I4,I6,I10] have weights [1,2,3,5]
         if inv[1] ne 0 then
-            return [1,c^2*inv[2],c^3*inv[3],c^5*inv[5]] where c := 1/inv[1];
+            return [1,c^2*inv[2],c^3*inv[3],c^5*inv[4]] where c := 1/inv[1];
         elif inv[2] ne 0 then
             r := PowerClassRepresentative(inv[2],2); c := Roots(t^2-r/inv[2])[1][1];
-            inv1 := [0,r,c^3*inv[3],c^5*inv[5]]; c:=-c;
-            inv2 := [0,r,c^3*inv[3],c^5*inv[5]];
+            inv1 := [0,r,c^3*inv[3],c^5*inv[4]]; c:=-c;
+            inv2 := [0,r,c^3*inv[3],c^5*inv[4]];
             return i where i:=Min([inv1,inv2]);
         elif inv[3] ne 0 then
             r := PowerClassRepresentative(inv[3],3); c := Roots(t^3-r/inv[3])[1][1];
-            inv1 := [0,0,r,c^4*inv[4],c^5*inv[5]];
-            if p mod 3 ne 1 then return inv; end if;
+            inv1 := [0,0,r,c^5*inv[4]];
+            if p mod 3 ne 1 then return inv1; end if;
             z := (R!PrimitiveRoot(p))^((p-1) div 3);
-            c *:= z; inv2 := [0,0,r,c^5*inv[5]];
-            c *:= z; inv3 := [0,0,r,c^5*inv[5]];
+            c *:= z; inv2 := [0,0,r,c^5*inv[4]];
+            c *:= z; inv3 := [0,0,r,c^5*inv[4]];
             return a where a:=Min([inv1,inv2,inv3]);
         else
-            return [0,0,0,0,PowerClassRepresentative(inv[5],5)];
+            return [0,0,0,PowerClassRepresentative(inv[4],5)];
         end if;
     end if;
     require &and[c in Rationals():c in inv]: "The Igusa-Clebsch invariants must lie in Q or Fp.";
@@ -884,8 +884,7 @@ intrinsic NormalizedIgusaClebschInvariants (C::CrvHyp : Easy:=false) -> SeqEnum
 end intrinsic;
 
 intrinsic NormalizedIgusaInvariants (C::CrvHyp : Easy:=false) -> SeqEnum
-{ Normalized Igusa invariants of genus 2 hyperelliptic curve (the invariants must lie in Q, but the curve need not be defined over Q).
-  The optional parameter Bound can be used to restrict the primes that can be used in the normalization when the invariants lie in Q. }
+{ Normalized Igusa invariants of genus 2 hyperelliptic curve (the invariants must lie in Q or Fp, but the curve need not be defined over Q or Fp). }
     inv := IgusaInvariants(C); F := BaseRing(C);
     if IsFinite(F) and IsPrime(#F) then
         if #F eq 2 then return inv; end if;
@@ -922,13 +921,12 @@ intrinsic NormalizedIgusaInvariants (C::CrvHyp : Easy:=false) -> SeqEnum
             return [0,0,0,0,PowerClassRepresentative(inv[5],5)];
         end if;
     end if;
-    require &and[c in Rationals():c in inv]: "The Igusa-Clebsch invariants must lie in Q or Fp.";
+    require &and[c in Rationals():c in inv]: "The Igusa invariants must lie in Q or Fp.";
     return z where z:=NormalizedProjectiveInvariants([Rationals()!c:c in inv], [1,2,3,4,5] : Easy:=Easy);
 end intrinsic;
 
 intrinsic NormalizedModularIgusaInvariants (C::CrvHyp : Easy:=false) -> SeqEnum
-{ Returns the "modular invariants" of the genus 2 curve C as defined in arXiv:2301.10118.
-    The optional parameter Bound can be used to restrict the primes that can be used in the normalization when the invariants lie in Q. }
+{ Returns the "modular invariants" of the genus 2 curve C as defined in arXiv:2301.10118. }
     I := IgusaClebschInvariants(C);
     require &and[c in Rationals():c in I]: "The Igusa-Clebsch invariants must lie in Q.";
     J := [I[2]/4,(I[1]*I[2]-3*I[3])/8,-I[4]/4096,I[1]*I[4]/2^15];
@@ -951,8 +949,8 @@ intrinsic NormalizedShiodaInvariants (f::RngUPolElt,h::RngUPolElt : Easy:=false)
 end intrinsic;
 
 intrinsic NormalizedDixmierOhnoInvariants (f::RngMPolElt : Easy:=false) -> SeqEnum
-{ Normalized Dixmier-Ohno invaraints of smooth plane quartic f(x,y,z)=0 defined over Q. }
-    require VariableWeights(Parent(f)) eq [1,1,1] and IsHomogeneous(f) and Degree(f) eq 4: "Input muste be a ternary quartic form.";
+{ Normalized Dixmier-Ohno invariants of smooth plane quartic f(x,y,z)=0 defined over Q. }
+    require VariableWeights(Parent(f)) eq [1,1,1] and IsHomogeneous(f) and Degree(f) eq 4: "Input must be a ternary quartic form.";
     R := BaseRing(Parent(f));
     require Type(R) eq FldRat or Type(R) eq RngInt: "Curve must be defined over Q.";
     inv, w := DixmierOhnoInvariants(f:normalize);
@@ -960,16 +958,16 @@ intrinsic NormalizedDixmierOhnoInvariants (f::RngMPolElt : Easy:=false) -> SeqEn
 end intrinsic;
 
 intrinsic NormalizedDixmierOhnoInvariants (C::CrvPln : Easy:=false) -> SeqEnum
-{ Normalized Dixmier-Ohno invaraints of smooth plane quartic C:f(x,y,z)=0 defined over Q. }
+{ Normalized Dixmier-Ohno invariants of smooth plane quartic C:f(x,y,z)=0 defined over Q. }
     return NormalizedDixmierOhnoInvariants(DefiningPolynomial(C) : Easy:=Easy);
 end intrinsic;
 intrinsic SPQInvariants (f::RngMPolElt : Easy:=false) -> SeqEnum
-{ Normalized Dixmier-Ohno invaraints of smooth plane quartic f(x,y,z)=0 defined over Q. }
+{ Normalized Dixmier-Ohno invariants of smooth plane quartic f(x,y,z)=0 defined over Q. }
     return NormalizedDixmierOhnoInvariants(f : Easy:=Easy);
 end intrinsic;
 
 intrinsic SPQInvariants (f::MonStgElt : Easy:=false) -> SeqEnum
-{ Normalized Dixmier-Ohno invaraints of smooth plane quartic f(x,y,z)=0 defined over Q. }
+{ Normalized Dixmier-Ohno invariants of smooth plane quartic f(x,y,z)=0 defined over Q. }
   R<x,y,z>:=PolynomialRing(Rationals(),3);
   return SPQInvariants(eval(f) : Easy:=Easy);
 end intrinsic;
@@ -1100,7 +1098,7 @@ intrinsic PrimePowers(B::RngIntElt) -> SeqEnum[RngInt]
 end intrinsic;
 
 intrinsic ProperDivisors(N::RngIntElt) -> SeqEnum[RngIntElt]
-{ Sorted list of postive proper divisors of the integer N. }
+{ Sorted list of nontrivial divisors of the positive integer N (excluding both 1 and N). }
     return N eq 1 select [] else D[2..#D-1] where D:=Divisors(N);
 end intrinsic;
 
@@ -1135,7 +1133,7 @@ intrinsic PointCountsToLPolynomial (n::SeqEnum[RngIntElt], q::RngIntElt) -> RngU
 end intrinsic;
 
 intrinsic LPolynomialToTraces (L::RngUPolElt:d:=0) -> SeqEnum[RngIntElt], RngIntElt
-{ Returns the sequence of Frobenius traces for a genus g curve over Fq,Fq^2,...,Fq^g corresponding to the givien L-polynomial of degree 2g (or just over Fq,..Fq^d if d is specified). }
+{ Returns the sequence of Frobenius traces for a genus g curve over Fq,Fq^2,...,Fq^g corresponding to the given L-polynomial of degree 2g (or just over Fq,..Fq^d if d is specified). }
     require Degree(L) gt 0 and IsEven(Degree(L)): "Lpolynomial must have positive even degree 2g";
     g := ExactQuotient(Degree(L),2);
     b,p,e := IsPrimePower(Integers()!LeadingCoefficient(L));
@@ -1151,7 +1149,7 @@ intrinsic LPolynomialToTraces (L::RngUPolElt:d:=0) -> SeqEnum[RngIntElt], RngInt
 end intrinsic;
 
 intrinsic LPolynomialToPointCounts (L::RngUPolElt:d:=0) -> SeqEnum[RngIntElt], RngIntElt
-{ Returns the sequence of point counrs of a genus g curve over Fq,Fq^2,...,Fq^g corresponding to the givien L-polynomial of degree 2g (or just over Fq,..Fq^d if d is specified). }
+{ Returns the sequence of point counts of a genus g curve over Fq,Fq^2,...,Fq^g corresponding to the given L-polynomial of degree 2g (or just over Fq,..Fq^d if d is specified). }
     t, q := LPolynomialToTraces(L:d:=d);
     if d eq 0 then d := #t; end if;
     return [q^i+1-t[i] : i in [1..d]];
@@ -1208,7 +1206,7 @@ end intrinsic;
 intrinsic SmoothNumberCount (P::SeqEnum[RngIntElt], B::RngIntElt) -> RngIntElt
 { Counts the positive integers <= B whose prime factors lie in P. The primality of the integers in P is not verified.  }
     require B gt 0: "B must be positive";
-    S := []; for p in P do Append(~S,p); q := p*p; while q lt B do Append(~S,q); q *:= q; end while; end for;
+    S := []; for p in P do Append(~S,p); q := p*p; while q le B do Append(~S,q); q *:= q; end while; end for;
     S := Sort(S);
     T:=[1]; cnt := 0;
     for s in S do
@@ -1223,7 +1221,7 @@ end intrinsic;
 intrinsic SmoothNumbers (P::SeqEnum[RngIntElt], B::RngIntElt: B0:=1) -> SeqEnum[RngIntElt]
 { Returns a list of the integers in [B0,B] whose prime factors lie in P (B0=1 if unspecified). The primality of the integers in P is not verified.  }
     require B0 gt 0 and B ge B0: "B0 <= B must be positive";
-    S := []; for p in P do Append(~S,p); q := p*p; while q lt B do Append(~S,q); q *:= q; end while; end for;
+    S := []; for p in P do Append(~S,p); q := p*p; while q le B do Append(~S,q); q *:= q; end while; end for;
     S := Sort(S);
     T:=[1]; L := [];
     for s in S do
@@ -1239,9 +1237,9 @@ intrinsic SmoothNumbers (P::SeqEnum[RngIntElt], B::RngIntElt: B0:=1) -> SeqEnum[
 end intrinsic;
 
 intrinsic PowerClassRepresentative (a::RngIntElt, p::RngIntElt, n::RngIntElt:Root:=false) -> RngIntElt
-{ Returns the least nonnegative integer b for which a*c^n = b for some c in Fp (intended for small n, this will be very slow if gcd(n,p-1) is large). }
+{ Returns the least nonnegative integer b for which a*c^n = b for some nonzero c in Fp (intended for small n, this will be very slow if gcd(n,p-1) is large). }
     require IsProbablePrime(p): "p must be prime";
-    require n gt 0: "n most be positive";
+    require n gt 0: "n must be positive";
     a := a mod p; if a le 1 then return a; end if;
     n := GCD(p-1,n);
     if n eq 1 then return 1; end if;

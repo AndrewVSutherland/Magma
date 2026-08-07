@@ -1,8 +1,11 @@
 freeze;
 
-// depends on genus2euler.m to hande primes of almost good reduction for genus 2 curves efficiently
+// depends on genus2euler.m to handle primes of almost good reduction for genus 2 curves efficiently
 // uses EulerFactor for primes in [2^12,2^13] of bad reduction for the Jacobian, which may be slow
 // For genus 2 curves it would be faster to use Pari/GP's lfungenus, but this requires Pari/GP 2.18
+// NB: the genus 2 fast paths of TraceHash/TwistHash(C::CrvHyp) require the external "hashcurves" binary
+// (smalljac) in the PATH, and SlowTraceHash/TraceHash(C::CrvPln) require a TracesOfFrobenius intrinsic
+// for CrvHyp/CrvPln (with a B0 parameter) that is not part of this package or of stock Magma
 
 c:=[326490430436040986,559705121321738418,1027143540648291608,1614463795034667624,455689193399227776,
     812966537786397194,2073755909783565705,1309198521558998535,486216762465058766,1847926951704044964,
@@ -130,7 +133,7 @@ intrinsic TraceHash(E::CrvEll[FldRat]) -> RngIntElt
 end intrinsic;
 
 intrinsic TwistHash(E::CrvEll[FldRat]) -> RngIntElt
-{ Given an elliptic curve E/Q computes the hash sum_(2^12<p<2^13) |a_p(E)|*c_p mod 2^61-1. }
+{ Given an elliptic curve E/Q computes the hash sum_(2^12<p<2^13) |a_p(E0)|*c_p mod 2^61-1, where E0 is the minimal quadratic twist of j(E) and a_p(E0) is taken to be 0 at bad primes of E0 (for j=0,1728 all twists of E, including quartic/sextic twists, thus get the same hash). }
     E := MinimalQuadraticTwist(jInvariant(E)); D := Integers()!Discriminant(E);
     return TraceHash(func<p|IsDivisibleBy(D,p) select 0 else Abs(TraceOfFrobenius(E,p))>);
 end intrinsic;
@@ -178,13 +181,13 @@ intrinsic TraceHash(C::CrvPln[FldRat]) -> RngIntElt
 end intrinsic;
 
 intrinsic TraceHash(C::CrvPln[FldRat], E::CrvEll[FldRat]) -> RngIntElt
-{ Given a smooth plane quartic curve C/Q and an elliptic curve E/q computes the hash sum_(2^12<p<2^13) (a_p(C)-a_p(E))*c_p mod 2^61-1 defined in Sec 4.3 of https://doi.org/10.1112/S146115701600019X. }
+{ Given a smooth plane quartic curve C/Q and an elliptic curve E/Q computes the hash sum_(2^12<p<2^13) (a_p(C)-a_p(E))*c_p mod 2^61-1 defined in Sec 4.3 of https://doi.org/10.1112/S146115701600019X. }
     require not IsSingular(C) and IsProjective(C) and Degree(C) eq 4 and Genus(C) eq 3: "C should be a smooth plane quartic";
     return (TraceHash(C)-TraceHash(E)) mod p where p:=2^61-1;
 end intrinsic;
 
 intrinsic TraceHash(C::CrvHyp[FldRat], E::CrvEll[FldRat]) -> RngIntElt
-{ Given a hyperelliptic curve C/Q of genus 3 and an elliptic curve E/q computes the hash sum_(2^12<p<2^13) (a_p(C)-a_p(E))*c_p mod 2^61-1 defined in Sec 4.3 of https://doi.org/10.1112/S146115701600019X. }
+{ Given a hyperelliptic curve C/Q of genus 3 and an elliptic curve E/Q computes the hash sum_(2^12<p<2^13) (a_p(C)-a_p(E))*c_p mod 2^61-1 defined in Sec 4.3 of https://doi.org/10.1112/S146115701600019X. }
     require Genus(C) eq 3: "C should be a hyperelliptic curve of genus 3";
     return (TraceHash(C)-TraceHash(E)) mod p where p:=2^61-1;
 end intrinsic;
@@ -204,8 +207,8 @@ intrinsic TraceHash(M::ModSym) -> RngIntElt
     return TraceHash(Eigenform(M,8192));
 end intrinsic;
 
-intrinsic TraceStats(aplist::SeqEnum, w::RngIntElt:Moments:=6) -> SeqEnum,FldRatElt,RngIntElt
-{ Given a list of ap values indexed by primes up to at least 2^13 and motivic weight w, returns trace hash, zratio, moments. }
+intrinsic TraceStats(aplist::SeqEnum, w::RngIntElt:Moments:=6) -> FldReElt,SeqEnum,RngIntElt
+{ Given a list of ap values indexed by primes up to at least 2^13 and motivic weight w, returns zratio, moments, trace hash. }
     assert #aplist ge 1028;  // need at least the 1028 primes up to 2^13
     h := TraceHash(aplist[565..1028]);
     z := 1.0*#[a:a in aplist|a eq 0]/#aplist;

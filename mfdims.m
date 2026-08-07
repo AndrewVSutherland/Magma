@@ -1,7 +1,7 @@
 freeze;
 
 /*
-    Dependencies: utils.m
+    Dependencies: utils.m, chars.m
 
     This module implements various intrinsics for efficiently computing Q-dimensions of spaces of modular forms.
     The TraceForm intrinsic shells out to Pari/GP and won't work if gp is not installed.
@@ -32,7 +32,7 @@ idxG1 := func<n|EulerPhi(n)*idxG0(n)>;
 // Function defined on page 72 of https://doi.org/10.1007/BFb0065297 (Cohen-Oesterle article Dimensions des espaces de formes modulaires in Modular Functions of One Variable VI)
 lambda := func<r,s,p|2*s gt r select 2*p^(r-s) else (2*x eq r select p^x + p^(x-1) else 2*p^x where x := r div 2)>;
 
-// Formula worked out by Kevin Buzzard in http://wwwf.imperial.ac.uk/~buzzard/maths/research/notes/dimension_of_spaces_of_eisenstein_series.pdf, with one ovious typo corrected (2*s==r, p>2 case)
+// Formula worked out by Kevin Buzzard in http://wwwf.imperial.ac.uk/~buzzard/maths/research/notes/dimension_of_spaces_of_eisenstein_series.pdf, with one obvious typo corrected (2*s==r, p>2 case)
 new_lambda := func<r,s,p|2*s gt r select (r eq s select 2 else (r eq s+1 select 2*p-4 else 2*(p-1)^2*p^(r-s-2)))
                                   else (2*s eq r select (p eq 2 select 0 else (s eq 1 select p-3 else (p-2)*(p-1)*p^(s-2)))
                                    else (IsOdd(r) select 0
@@ -61,12 +61,12 @@ end intrinsic;
 
 intrinsic QDimensionModularForms (chi::GrpDrchElt,k::RngIntElt) -> RngIntElt
 { Q-dimension of the space M_k(N,chi) of weight-k modular forms for Gamma0(N) with character chi (where N is the modulus of chi). }
-    return Dimension(ModularSymbols(chi,k,-1))*Degree(chi);
+    return QDimensionCuspForms(chi,k) + QDimensionEisensteinForms(chi,k);
 end intrinsic;
 
 intrinsic QDimensionModularForms (N::RngIntElt,k::RngIntElt) -> RngIntElt
 { Q-dimension of the space M_k(N) of weight-k modular forms from Gamma0(N). }
-    return Dimension(ModularSymbols(N,k,-1));
+    return QDimensionCuspForms(N,k) + QDimensionEisensteinForms(N,k);
 end intrinsic;
 
 intrinsic QDimensionModularFormsGamma1 (N::RngIntElt,k::RngIntElt) -> RngIntElt
@@ -130,7 +130,7 @@ intrinsic QDimensionOldCuspFormsGamma1 (N::RngIntElt,k::RngIntElt) -> RngIntElt
 end intrinsic;
 
 intrinsic DimensionCuspForms(N::RngIntElt,n::RngIntElt,k::RngIntElt) -> RngIntElt
-{ Dimension of the space S_k(N,chi), where chi is the Dirichlet character with Conrey label N.n as a vector space over the charater field. }
+{ Dimension of the space S_k(N,chi), where chi is the Dirichlet character with Conrey label N.n as a vector space over the character field. }
     require k ge 2: "Weight k must be at least 2.";
     if N eq 1 or n eq 1 then return IsEven(k) select S0(N,k) else 0; end if;
     if Parity(N,n) ne (-1)^k then return 0; end if;
@@ -144,7 +144,7 @@ end intrinsic;
 
 intrinsic QDimensionCuspForms (chi::GrpDrchElt,k::RngIntElt) -> RngIntElt
 { The Q-dimension of the space S_k(N,chi) of cuspidal modular forms of weight k, level N, and character chi, where N is the modulus of chi. }
-    if k eq 1 then return Dimension(ModularForms(chi,k)); end if;
+    if k eq 1 then return Dimension(CuspidalSubspace(ModularForms(chi,k))); end if;
     return DimensionCuspForms(chi,k)*Degree(chi);
 end intrinsic;
 
@@ -155,31 +155,31 @@ intrinsic QDimensionCuspForms (s::MonStgElt,k::RngIntElt) -> RngIntElt
 end intrinsic;
 
 intrinsic DimensionNewCuspForms(N::RngIntElt,n::RngIntElt,k::RngIntElt) -> RngIntElt
-{ Dimension of the new part of S_k(N,chi), where chi is the Dirichlet character with Conrey label N.n as a vector space over the charater field. }
+{ Dimension of the new part of S_k(N,chi), where chi is the Dirichlet character with Conrey label N.n as a vector space over the character field. }
     require k ge 2: "Weight k must be at least 2.";
     C := Conductor(N,n);
     return &+[DimensionCuspForms(M,AssociatedCharacter(M,N,n),k)*mumu(N div M) where M:=C*d : d in Divisors(N div C)];
 end intrinsic;
 
 intrinsic QDimensionNewCuspForms (N::RngIntElt,n::RngIntElt,k::RngIntElt) -> RngIntElt
-{ Q-dimension of the space S_k(N,chi) where chi is the Dirichlet character with Conrey label N.n. }
+{ Q-dimension of the new subspace of S_k(N,chi) where chi is the Dirichlet character with Conrey label N.n. }
     return DimensionNewCuspForms(N,n,k)*Degree(N,n);
 end intrinsic;
 
 intrinsic QDimensionNewCuspForms (chi::GrpDrchElt,k::RngIntElt) -> RngIntElt
-{ The Q-dimension of the new subspace of cuspdial forms of weight k, level N, and character chi, where N is the modulus of chi. }
+{ The Q-dimension of the new subspace of cuspidal forms of weight k, level N, and character chi, where N is the modulus of chi. }
     // This is very slow in weight 1, but it works
     return k eq 1 select  QDimensionCuspForms(chi,k) - QDimensionOldCuspForms(chi,k) else DimensionNewCuspForms(chi,k)*Degree(chi);
 end intrinsic;
     
 intrinsic QDimensionNewCuspForms (s::MonStgElt,k::RngIntElt) -> RngIntElt
-{ The Q-dimension of the new subspace of cuspdial forms of weight k, level N, and character chi, where N is the modulus of chi. }
+{ The Q-dimension of the new subspace of cuspidal forms of weight k, level N, and character chi, where N is the modulus of chi. }
     N,n := ConreyCharacterFromLabel(s);
     return QDimensionNewCuspForms(N,n,k);
 end intrinsic;
     
 intrinsic QDimensionNewCuspForms (s::MonStgElt) -> RngIntElt
-{ The Q-dimension of the new subspace of cuspdial forms of weight k, level N, and character chi, where N is the modulus of chi. }
+{ The Q-dimension of the new subspace of cuspidal forms of weight k, level N, and character chi, where N is the modulus of chi. }
     t := Split(s,".");
     require #t eq 3: "Invalid newspace label";
     N,n := ConreyCharacterFromLabel(t[1] cat "." cat t[3]);
@@ -207,7 +207,7 @@ intrinsic QDimensionOldCuspForms (s::MonStgElt,k::RngIntElt) -> RngIntElt
 end intrinsic;
 
 intrinsic QDimensionOldCuspForms (N::RngIntElt,k::RngIntElt) -> RngIntElt
-{ The Q-dimension of the old subspace of cuspdial forms of weight k for Gamma0(N). }
+{ The Q-dimension of the old subspace of cuspidal forms of weight k for Gamma0(N). }
     return QDimensionOldCuspForms(DirichletGroup(N)!1,k);
 end intrinsic;
 
@@ -251,7 +251,7 @@ end intrinsic;
 intrinsic QDimensionNewEisensteinForms (chi::GrpDrchElt,k::RngIntElt) -> RngIntElt
 { The Q-dimension of the new subspace of E_k(N,chi), the space of Eisenstein series of weight k, level N, and character chi, where N is the modulus of chi. }
     require k gt 0: "The weight k must be a positive integer";
-    if IsOdd(k) ne IsOdd(chi) then return 0,0; end if;
+    if IsOdd(k) ne IsOdd(chi) then return 0; end if;
     N := Modulus(chi);  M := Conductor(chi);
     if N eq 1 then return k gt 2 select 1 else 0; end if;
     D := prod([new_lambda(Valuation(N,p),Valuation(M,p),p):p in PrimeDivisors(N)]);
@@ -281,7 +281,7 @@ intrinsic QDimensionNewEisensteinForms (s::MonStgElt,k::RngIntElt) -> RngIntElt
 end intrinsic;
 
 intrinsic QDimensionNewEisensteinForms (N::RngIntElt,k::RngIntElt) -> RngIntElt
-{ The Q-dimension of the space E_k(N,chi) of Eisenstein series of weight k for Gamma0(N). }
+{ The Q-dimension of the new subspace of E_k(N), the space of Eisenstein series of weight k for Gamma0(N). }
     return QDimensionNewEisensteinForms (N,1,k);
 end intrinsic;
 
@@ -300,8 +300,8 @@ intrinsic NumberOfNewspaces (B::RngIntElt:MaxN:=0,Maxk:=0,SkipWeightOne:=false,T
     if MaxN eq 0 then MaxN := SkipWeightOne select B div 4 else B; end if;
     if Maxk eq 0 then Maxk := Floor(Sqrt(B)); end if;
     k0 := SkipWeightOne select 1 else 0;
-    if TrivialCharOnly then return &+[Min(Floor(Sqrt(B/N)),Maxk)-k0:N in [1..MaxN]]; end if;
-    return &+[(Min(Floor(Sqrt(B/N)),Maxk)-k0) * NumberOfCharacterOrbits(N) : N in [1..MaxN]];
+    if TrivialCharOnly then return &+[ZZ|Min(Floor(Sqrt(B/N)),Maxk)-k0:N in [1..MaxN]]; end if;
+    return &+[ZZ|(Min(Floor(Sqrt(B/N)),Maxk)-k0) * NumberOfCharacterOrbits(N) : N in [1..MaxN]];
 end intrinsic;
 
 
@@ -693,7 +693,7 @@ function popa1p(k,N,p) // l = 1, l' = N, n = p prime in Theorem 4 of Popa  https
     if k eq 2 then
         S1 := &+[ZZ|s eq 0 select 0 else s*&+[ZZ|H12(D div (u*u))*CN(N,u,t,p):u in Divisors(GCD(N,ss(D)))] where s:=SNbase(N,t,p) where D:=4*p-t^2:t in [-b..b]|&and[KroneckerSymbol(t^2-4*p,q) ge 0:q in qq]] div 12;
     else
-        S1 := &+[ZZ|s eq 0 select 0 else s*&+[ZZ|H12(D div (u*u))*CN(N,u,t,p):u in Divisors(GCD(N,ss(D)))]*SNbase(N,t,p)*Gpk(k,t^2,p) where s:=SNbase(N,t,p) where D:=4*p-t^2:t in [-b..b]] div 12;
+        S1 := &+[ZZ|s eq 0 select 0 else s*&+[ZZ|H12(D div (u*u))*CN(N,u,t,p):u in Divisors(GCD(N,ss(D)))]*Gpk(k,t^2,p) where s:=SNbase(N,t,p) where D:=4*p-t^2:t in [-b..b]] div 12;
     end if;
     S2 := N mod p eq 0 select &+[ZZ|EulerPhi(GCD(r,N div r)):r in Divisors(N)|(r mod p ne 0 or s mod p ne 0) and IsDivisibleBy(p-1,GCD(r,s)) where s := N div r]
                        else 2*&+[ZZ|EulerPhi(GCD(r,N div r)):r in Divisors(N)|IsDivisibleBy(p-1,GCD(r,s)) where s := N div r];
@@ -709,7 +709,8 @@ beta1 := func<N|&*[ZZ|a[2] eq 1 select -2 else (a[2] eq 2 select 1 else 0):a in 
 betap := func<p,N|&*[ZZ|a[1] eq p select (a[2] eq 1 select -1 else 0) else (a[2] eq 1 select -2 else (a[2] eq 2 select 1 else 0)):a in Factorization(N)]>;
 
 function newpopa1(k,N,n)
-    return &+[d^(k-1)*&+[ZZ|beta(n div d^2, N div M)*popa1(k,M,n):M in Divisors(N)]:d in Divisors(GCD(Squarefree(N),ssr(n)))];
+    G := &*[ZZ|p:p in PrimeDivisors(N)|Valuation(N,p) eq 1 and Valuation(n,p) ge 2];
+    return &+[d^(k-1)*&+[ZZ|beta(n div d^2, (N div M) div d)*popa1(k,M,n div (d*d)):M in Divisors(N)|GCD(M,d) eq 1]:d in Divisors(G)];
 end function;
 
 function newpopa11(k,N)
@@ -786,7 +787,7 @@ function nutl(t,l,N:fast:=true)
         elif v eq 1 then mm := s-1;
         elif v eq 2 then mm := m^2-2*m-1+s;
         elif v eq 3 then mm := s eq 0 select 1-m^2 else (m-s)*(m-1)*(s-1);
-        elif v eq 4 then mm := s eq 0 select m(1-m) else -(m-s)*m*s;
+        elif v eq 4 then mm := s eq 0 select m*(1-m) else -(m-s)*m*s;
         elif v eq 5 then mm := s eq 0 select m^2 else 0;
         else mm := 0;
         end if;
@@ -934,12 +935,12 @@ function skp(k,m,n)
         else
             if IsSquarefree(n) then
                 return func<l|-(A div 24)-GCD(Qn,l+1)*GCD(Qmdivn,l-1) where
-                              A := ZZ!&+[IsSquarefree(ndivnn) select ZZ!2*&+[ZZ|Hnn(s^2*nn2-fourlnn):s in [1..sb]] + Hnn(-fourlnn)
-                                               else 2*&+[ZZ|Hnn(s^2*nn2-fourlnn):s in [1..sb]|IsSquarefree(GCD(s^2,ndivnn))]
+                              A := &+[2*&+[ZZ|Hnn(s^2*nn2-fourlnn):s in [1..sb]] + Hnn(-fourlnn)
                                    where sb := Floor(Sqrt(fourlnn)/nn) where ndivnn := n div nn where fourlnn := 4*l*nn where nn2 := nn*nn : nn in dn]>;
             else
                 return func<l|-(A div 24)-GCD(Qn,l+1)*GCD(Qmdivn,l-1) where
-                              A := &+[2*&+[ZZ|Hnn(s^2*nn2-fourlnn):s in [1..sb]] + Hnn(-fourlnn)
+                              A := ZZ!&+[IsSquarefree(ndivnn) select ZZ!2*&+[ZZ|Hnn(s^2*nn2-fourlnn):s in [1..sb]] + Hnn(-fourlnn)
+                                               else 2*&+[ZZ|Hnn(s^2*nn2-fourlnn):s in [1..sb]|IsSquarefree(GCD(s^2,ndivnn))]
                                    where sb := Floor(Sqrt(fourlnn)/nn) where ndivnn := n div nn where fourlnn := 4*l*nn where nn2 := nn*nn : nn in dn]>;
             end if;
         end if;
@@ -968,9 +969,9 @@ function newszN(k,m,l) // k = weight, m = level, l = Hecke T_l, Atkin-Lehner W_m
     return &+[ZZ|alpha(m div mm)*skm(k,mm,l,mm):mm in Divisors(m)];
 end function;
 
-function newszp(k,m)
+function newszp(k,m,n)
     dm := Divisors(m); am := [ZZ|alpha(m div mm):mm in dm];
-    skpp := [skp(k,mm):mm in dm];
+    skpp := [skp(k,mm,GCD(n,mm)):mm in dm];
     return func<l|&+[ZZ|am[i]*skpp[i](l):i in [1..#dm]]>;
 end function;
 
@@ -1173,11 +1174,10 @@ intrinsic FrickeNewTrace(N::RngIntElt,k::RngIntElt,n::RngIntElt) -> RngIntElt
 end intrinsic;
 
 intrinsic FrickeNewTraces(N::RngIntElt,k::RngIntElt,n::RngIntElt) -> SeqEnum[RngIntElt]
-{ Trace of T(n)*W(N) on S_k^new(N) for n = 1 or prime. }
+{ Trace of T(p)*W(N) on S_k^new(N) for primes p <= n. }
     require N ge 1: "The level N must be positive";
     require k ge 2 and IsEven(k): "The weight k must be a positive even integer.";
-    f := newpopaNp(k,N);
-    return [f(p):p in PrimesInInterval(1,n)];
+    return [newpopaNp(k,N,p):p in PrimesInInterval(1,n)];
 end intrinsic;
 
 intrinsic ALNewTrace(N::RngIntElt,k::RngIntElt,n::RngIntElt,Q::RngIntElt) -> RngIntElt
@@ -1198,17 +1198,19 @@ intrinsic ALNewTraces(N::RngIntElt,k::RngIntElt,nmax::RngIntElt,Q::RngIntElt:Pri
         newszpp := newszp(k,N,Q);
         return [newszpp(p) : p in PrimesInInterval(1,nmax)|N mod p ne 0];
     else
-        return [newsz(k,N,n,Q):n in PrimesInInterval(1,nmax)|N mod n ne 0];
+        return [newsz(k,N,n,Q):n in [1..nmax]|GCD(N,n) eq 1];
     end if;
 end intrinsic;
 
 intrinsic QDimensionCuspForms (N::RngIntElt,k::RngIntElt) -> RngIntElt
-{ The Q-dimension of the new subspace of cuspdial forms of weight k for Gamma0(N). }
+{ The Q-dimension of the space of cuspidal forms of weight k for Gamma0(N). }
+    if IsOdd(k) then return 0; end if;
     return tomo1(k,N); // this is 100x faster than using the more general formulas above
 end intrinsic;
 
 intrinsic QDimensionNewCuspForms (N::RngIntElt,k::RngIntElt) -> RngIntElt
-{ The Q-dimension of the new subspace of cuspdial forms of weight k for Gamma0(N). }
+{ The Q-dimension of the new subspace of cuspidal forms of weight k for Gamma0(N). }
+    if IsOdd(k) then return 0; end if;
     return newtomo1(k,N); // this is 100x faster than using the more general formulas above
 end intrinsic;
 
@@ -1222,6 +1224,6 @@ intrinsic SturmBound (N::RngIntElt, k::RngIntElt) -> RngIntElt
 end intrinsic;
 
 intrinsic TraceForm (N::RngIntElt, k::RngIntElt, n::RngIntElt) -> SeqEnum[RngIntElt]
-{ List of the first n coefficients of the trace form for the space of modular forms of weight k for Gamma0(N). }
+{ List of the first n coefficients of the trace form for the new subspace of cusp forms of weight k for Gamma0(N). }
     return atoii(Pipe("gp -q", Sprintf("a=mfcoefs(mftraceform([%o,%o]),%o); print(a[2..%o])",N,k,n,n+1)));
 end intrinsic;
