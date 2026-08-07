@@ -1,0 +1,26 @@
+{
+ "fixes": [
+  "README.md: corrected example DirichletCharacter(\"13.2\") -> DirichletCharacter(\"13.3\") (verified in Magma and against LMFDB char_dirichlet: modulus 13 orbit 13.c has Conrey indexes {3,9}; 13.2 lies in 13.f)",
+  "README.md: grammar fix 'an intrinsics for working' -> 'and intrinsics for working'",
+  "mfdims.m header: dependency list corrected from 'utils.m' to 'utils.m, chars.m' (uses ConreyCharacterAngle, ConreyCharacterFromLabel, NumberOfCharacterOrbits from chars.m)",
+  "genus1.m header: removed stray unbalanced ')' in description sentence",
+  "chars.m docstrings: 'specifed' -> 'specified' (9x), 'specifeid' -> 'specified', 'eignvalue conjedcture' -> 'eigenvalue conjecture' (3x), 'Mudulus' -> 'Modulus' (3x), 'indentified' -> 'identified', 'Kronecker symbold' -> 'Kronecker symbol', 'Conry label' -> 'Conrey label', 'charatacter' -> 'character', 'the lable of' -> 'the label of'",
+  "chars.m comments: 'Impelemnts' -> 'Implements', 'apporach' -> 'approach'",
+  "gl2base.m docstrings: 'specififed' -> 'specified', 'homomoprhism' -> 'homomorphism', 'propogates' -> 'propagates' (2x), 'stablizes' -> 'stabilizes', 'Ths can be very slow' -> 'This', 'primtive' -> 'primitive' (2x), 'representating every posssible' -> 'representing every possible', 'inluding' -> 'including', 'determininant' -> 'determinant', 'canoncial' -> 'canonical' (2x)",
+  "gl2base.m require-message text: 'a sugroup of GL(n,Z/NZ)' -> 'a subgroup', 'determininant index 1' -> 'determinant index 1' (string text only, no behavior change)",
+  "gl2base.m comments: 'propogate' -> 'propagate', 'heruistic' -> 'heuristic', 'konwn' -> 'known', 'eleminate' -> 'eliminate', 'divisiion' -> 'division', 'isogney' -> 'isogeny', 'usse' -> 'use'",
+  "gl2tab.m comments: 'particluar' -> 'particular', 'multiplicitie' -> 'multiplicities', 'verifed' -> 'verified', 'lexicograpahically' -> 'lexicographically', 'permittedy' -> 'permitted', 'Frobneius' -> 'Frobenius', 'accoring' -> 'according', 'compatibiliy' -> 'compatibility'",
+  "utils.m: header 'easer' -> 'easier'; docstrings 'carraige' -> 'carriage' (2x), 'partititon' -> 'partition' (4x), 'delimter' -> 'delimiter', 'discrimnant' -> 'discriminant'",
+  "genus1.m docstring: 'A and B minmal' -> 'A and B minimal'",
+  "tracehash.m comment: 'to hande primes' -> 'to handle primes'",
+  "mfdims.m comment: 'one ovious typo' -> 'one obvious typo'"
+ ],
+ "flagged": [
+  "polredabs.m and tracehash.m have no Dependencies/Copyright header block (all other modules have one); tracehash.m's top comment does state its genus2euler.m dependency. Left as-is (adding headers is authorial, not a correction).",
+  "Copyright year ranges are inconsistent across headers (utils.m 2019-2024, mfutils.m 2017-2019, others -2025); the author's prerogative, not changed.",
+  "utils.m SplitString docstring reads '(equivalent to python r.split(d) in python)' - redundant double 'python' but harmless; left alone.",
+  "genus1.m ModularPolynomial docstring has an unclosed parenthesis '(this function will dynamically load ... N < 1000.' - left alone since sentence restructuring is authorial; content is accurate.",
+  "git diff shows sibling-agent modifications in genus2euler.m, gl2points.m, mfutils.m, polredabs.m, tracehash.m and .gitignore that are not mine; my edits are confined to README.md, chars.m, genus1.m, gl2base.m, gl2tab.m, mfdims.m, tracehash.m, utils.m (comment/docstring/header text only)."
+ ],
+ "notes": "README verified empirically: DirichletCharacter(\\\"13.2\\\") gives orbit 13.f (order 12) while 13.3 gives 13.c (order 3), confirmed both in Magma and via LMFDB SQL (char_dirichlet: modulus=13 rows; orbit 3 = 13.c with first=3,last=9; orbit 6 = 13.f with first=2,last=11), so the README example was fixed to \\\"13.3\\\". magma.spec lists exactly the 11 .m files in the repo (tests/*.m correctly excluded) and AttachSpec succeeds; no load-order issues found (explicit import statements: chars.m<-utils.m, gl2points.m<-gl2base.m, gl2tab.m<-gl2base.m, all consistent with headers). All other header dependency claims verified by cross-file intrinsic usage (gl2points.m does use genus1.m's FrobeniusMatrix/EndomorphismRingData; gl2tab.m's Conjugates/IsConjugate calls are stock Magma group intrinsics, so its header needs no chars.m). Typo sweep done with aspell over all docstrings (including multi-line) and all // comments; every fix is pure text in comments, docstrings, or require-message string literals - no executable code touched. After each batch of edits, AttachSpec(\\\"magma.spec\\\") re-verified OK, plus functional spot checks (CharacterOrbitLabel round-trip, GL1Characters on trivial subgroup of GL(1,Z/8Z) returns [1,3,5,7]). Recent commit 04b3a98 (fix typos) only touched gl2points.m lines 496/516; none of my edits overlap it. Nothing committed; all changes left in the working tree."
+}

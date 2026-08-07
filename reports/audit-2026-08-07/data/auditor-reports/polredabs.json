@@ -1,0 +1,105 @@
+[
+ {
+  "findings": [
+   {
+    "file": "/home/claude/Magma/polredabs.m",
+    "line": 95,
+    "intrinsic": "polredbestify",
+    "kind": "bug",
+    "severity": "high",
+    "confidence": "certain",
+    "description": "When DiscFactors is supplied, polredbestify passes it to the polredbest loop but DROPS it in the final polredabs call on line 95, so pari attempts to fully factor the discriminant. Since the entire purpose of DiscFactors is to handle fields whose discriminant cannot be factored, this makes the call hang indefinitely on exactly the inputs the option exists for. The result would be mathematically identical if it ever returned, but it effectively never does.",
+    "evidence": "With p=NextPrime(10^59)=100000000000000000000000000000000000000000000000000000000019, q=NextPrime(3*10^59+11)=300000000000000000000000000000000000000000000000000000000017, f=x^2-p*q:\n> g := polredabs(f : DiscFactors := [2,p,q]);  -- 'with factors: 0.010' (seconds)\n> g2 := polredbest(f : DiscFactors := [2,p,q]); -- 'best with factors: 0.010'\n> h,b := polredbestify(f : DiscFactors := [2,p,q]); -- killed by timeout 60 (EXIT: 124), never returns\nMechanism confirmed directly: echo '{print(Vecrev(Vec(polredabs(Pol(Vecrev([-3000...323,0,1]))))))}' | timeout 15 gp -q  -> EXIT: 124 (gp hangs factoring the 120-digit semiprime discriminant), while the same polredabs with the [T,listP] form returns instantly.",
+    "proposed_fix": "Line 95: change\n    if #DiscFactors gt 0 then return polredabs(f),true; end if;\nto\n    if #DiscFactors gt 0 then return polredabs(f:DiscFactors:=DiscFactors),true; end if;"
+   },
+   {
+    "file": "/home/claude/Magma/polredabs.m",
+    "line": 165,
+    "intrinsic": "nfisincl (RngUPolElt version)",
+    "kind": "bug",
+    "severity": "high",
+    "confidence": "certain",
+    "description": "The gp command is built with Sprintf(\"%o\",f) which prints the polynomials using the parent ring's print name, and the eval on line 170 only has the local identifier x (line 163) in scope. The intrinsic therefore only works when the (session-global) rational polynomial ring happens to print its variable as \"x\". In a fresh Magma session the global ring is unnamed, Sprintf produces \"$.1^2+1\", gp fails to parse it, and the intrinsic crashes with 'Eval expression is empty'. If the user has named the ring variable y, gp answers in y and eval crashes with \"Identifier 'y' has not been declared\". Correct behavior: work for any parent ring name. Fix verified: sending coefficient vectors via Pol(Vecrev(...)) makes gp always answer in x, which the local binding x := Parent(g).1 then maps back to the caller's ring regardless of its name.",
+    "evidence": "Fresh session (unnamed global ring):\n> R := PolynomialRing(Rationals()); e := nfisincl(R.1^2+1, R.1^4+1);\n  ***   expected character: ',' or ')' instead of: print(nfisincl(\n  ***   $.1^2+1,$.1^4+1))\n  User error: Eval expression is empty   (at polredabs.m line 170)\nRing named y:\n> Ry<y> := PolynomialRing(Rationals()); e := nfisincl(y^2+1, y^4+1);\n  In eval expression: >> [-y^2,y^2];  User error: Identifier 'y' has not been declared or assigned\nProposed fix verified in scratch: with a NON-global ring named y, cmd:=Sprintf(\"{print(nfisincl(Pol(Vecrev(%o)),Pol(Vecrev(%o))))}\",Coefficients(f),Coefficients(g)) produced s=\"[-1/2*x+1/2,1/2*x+1/2]\" and with x := Parent(g).1 the eval returned [-1/2*y+1/2, 1/2*y+1/2] in the caller's ring (Universe cmpeq Parent(g) true, values verified as embeddings of Q(sqrt5) generator).",
+    "proposed_fix": "Line 165: change\n    cmd:=Sprintf(\"{print(nfisincl(%o,%o))}\",f,g);\nto\n    cmd:=Sprintf(\"{print(nfisincl(Pol(Vecrev(%o)),Pol(Vecrev(%o))))}\",Coefficients(f),Coefficients(g));\n(keep line 163 'x := Parent(g).1;' which makes the eval'd x resolve to the caller's variable). Line 169 'R<T>:=PolynomialRing(Integers());' is dead code and can be deleted (see separate note)."
+   },
+   {
+    "file": "/home/claude/Magma/polredabs.m",
+    "line": 178,
+    "intrinsic": "nfisincl (SeqEnum version)",
+    "kind": "bug",
+    "severity": "medium",
+    "confidence": "certain",
+    "description": "The two branches return different types: the degree-1 shortcut (line 178) returns a sequence of RngUPolElt (polynomials), while the general branch (line 184) returns a sequence of coefficient sequences ([Coefficients(Evaluate(h,x)):h in s]). The declared return type SeqEnum[RngUPolElt] and the docstring ('list of polynomials') match neither the general branch nor the seq-in/seq-out convention of the other SeqEnum intrinsics in this file (polredabs, polredbestify all return Eltseq-style sequences). One branch is a copy-paste of the RngUPolElt version. Consistent behavior should be coefficient sequences throughout (matching the general branch and the module convention), with declaration/docstring updated.",
+    "evidence": "> e1 := nfisincl([1,0,1],[1,0,0,0,1]); e1, Type(e1[1]);\nseq general: [ [ 0, 0, -1 ], [ 0, 0, 1 ] ]  SeqEnum\n> e2 := nfisincl([-3,1],[-2,0,1]); e2, Type(e2[1]);\nseq deg1: [ 3 ]  RngUPolElt\nSame intrinsic, elements of the result have different types depending on Degree(f).",
+    "proposed_fix": "Line 178: change\n    if #f eq 2 then return [R!Roots(R!f)[1][1]]; end if;\nto\n    if #f eq 2 then return [[Roots(R!f)[1][1]]]; end if;\nand line 174: change '-> SeqEnum[RngUPolElt]' to '-> SeqEnum[SeqEnum]', with docstring amended to say each embedding is given by the coefficient sequence of the polynomial h. (Line 182's 'return [Parent(g)|];' should then become 'return [PowerSequence(Rationals())|];' or simply '[];' for universe consistency.)"
+   },
+   {
+    "file": "/home/claude/Magma/polredabs.m",
+    "line": 50,
+    "intrinsic": "polredbest (FldNum version)",
+    "kind": "doc-bug",
+    "severity": "low",
+    "confidence": "certain",
+    "description": "Docstring says 'returns the same number field defined using a canonical defining polynomial', copy-pasted from polredabs. polredbest is explicitly NON-canonical (the SeqEnum/RngUPolElt polredbest docstrings in this same file say 'small (non-canonical)'). pari's polredbest makes no canonicality guarantee.",
+    "evidence": "Line 38 (same file): '{ Computes a small (non-canonical) defining polynomial ... }' for polredbest(SeqEnum), versus line 50: '{ Given a number field returns the same number field defined using a canonical defining polynomial using pari. }' for polredbest(FldNum). Contradiction within the file; pari documentation confirms polredbest output is not canonical.",
+    "proposed_fix": "Line 50: change '{ Given a number field returns the same number field defined using a canonical defining polynomial using pari. }' to '{ Given a number field returns the same number field defined using a small (non-canonical) defining polynomial using pari. }'"
+   },
+   {
+    "file": "/home/claude/Magma/polredabs.m",
+    "line": 83,
+    "intrinsic": "IsPolredabsCandidate (SeqEnum version)",
+    "kind": "doc-bug",
+    "severity": "low",
+    "confidence": "certain",
+    "description": "Declared return type is SeqEnum but the intrinsic returns a BoolElt (it just delegates to the RngUPolElt version, which is declared -> BoolElt).",
+    "evidence": "> IsPolredabsCandidate([-5,0,1]);\ntrue\n(a BoolElt, not a SeqEnum; line 85 'return IsPolredabsCandidate(PolynomialRing(Integers())!f);' returns the BoolElt of the RngUPolElt version declared '-> BoolElt' on line 62).",
+    "proposed_fix": "Line 83: change 'intrinsic IsPolredabsCandidate (f::SeqEnum) -> SeqEnum' to 'intrinsic IsPolredabsCandidate (f::SeqEnum) -> BoolElt'"
+   },
+   {
+    "file": "/home/claude/Magma/polredabs.m",
+    "line": 99,
+    "intrinsic": "polredbestify (SeqEnum version)",
+    "kind": "doc-bug",
+    "severity": "low",
+    "confidence": "certain",
+    "description": "Declared return type is 'RngUPolElt, BoolElt' but the intrinsic returns 'Eltseq(f),b' i.e. a SeqEnum. (Both docstrings, lines 89 and 100, also contain the typo 'to get s smaller' for 'to get a smaller'.)",
+    "evidence": "> hs, bs := polredbestify([8,-2,1]); hs; Type(hs);\n[ 2, -1, 1 ]\nSeqEnum\n(line 102 is explicitly 'return Eltseq(f),b;').",
+    "proposed_fix": "Line 99: change 'intrinsic polredbestify (f::SeqEnum:DiscFactors:=[]) -> RngUPolElt, BoolElt' to 'intrinsic polredbestify (f::SeqEnum:DiscFactors:=[]) -> SeqEnum, BoolElt'. Optionally fix 'get s smaller' -> 'get a smaller' in the docstrings on lines 89 and 100."
+   },
+   {
+    "file": "/home/claude/Magma/polredabs.m",
+    "line": 32,
+    "intrinsic": "polredabs (FldRat version)",
+    "kind": "doc-bug",
+    "severity": "low",
+    "confidence": "certain",
+    "description": "Declared return type is FldNum but the intrinsic returns its FldRat argument unchanged. (Magma does not enforce declared return categories, so this is doc/signature drift rather than a runtime error, but the signature misleads callers and the .sig file.)",
+    "evidence": "> polredabs(Rationals()) cmpeq Rationals();\ntrue\n(returns the FldRat itself, not a FldNum).",
+    "proposed_fix": "Line 32: change 'intrinsic polredabs(K::FldRat:DiscFactors:=[]) -> FldNum' to 'intrinsic polredabs(K::FldRat:DiscFactors:=[]) -> FldRat'"
+   },
+   {
+    "file": "/home/claude/Magma/polredabs.m",
+    "line": 18,
+    "intrinsic": "polredabs (SeqEnum version) / get_gp_coeffs",
+    "kind": "note",
+    "severity": "low",
+    "confidence": "certain",
+    "description": "gp errors are silently swallowed: get_gp_coeffs parses whatever gp printed, so on a gp error the SeqEnum version returns [] and the RngUPolElt version returns the ZERO polynomial (Parent(f)![] coerces to 0) with no Magma error. E.g. non-squarefree input (Q[x]/(f) not etale, so outside the documented domain, but the failure mode is a silent wrong answer rather than an error). Suggest raising an error when the gp output contains no '[...]' vector, e.g. require Index(s,\"[\") gt 0: \"gp failed: \" cat s; in get_gp_coeffs, or documenting that f must be squarefree. Note the current pari (2.18.1) handles reducible squarefree input fine (polredabs(x^2-1)=x^2-x), so the 'etale algebra' docstring itself is accurate.",
+    "evidence": "> polredabs([2,4,2]);\n  *** polredabs: not an irreducible polynomial in nfmaxord: x^2 + 2*x + 1.  (gp stderr)\n[]\n> polredabs(x^2+2*x+1);\n  *** polredabs: not an irreducible polynomial ...\n0\n(the zero polynomial is returned as if it were the answer)."
+   },
+   {
+    "file": "/home/claude/Magma/polredabs.m",
+    "line": 169,
+    "intrinsic": "nfisincl (both versions)",
+    "kind": "note",
+    "severity": "low",
+    "confidence": "certain",
+    "description": "User-visible side effects on session-global polynomial rings: line 169 'R<T>:=PolynomialRing(Integers());' is dead code (T is never used; the eval output only involves x) that renames the print variable of the global integer polynomial ring to 'T' for the rest of the user's session; similarly line 177 'R<x>:=PolynomialRing(Rationals());' in the SeqEnum version renames the global rational polynomial ring to 'x'. Deleting line 169 is safe (verified: all nfisincl tests pass with the eval only needing the local x binding); the line-177 rename is at least load-bearing for its eval but could use Global:=false plus explicit coercion if the side effect matters.",
+    "evidence": "> Zi := PolynomialRing(Integers()); // after calling nfisincl(x^2+1,x^4+1)\n> Sprint(Zi.1);\nT\n(the global Z[x] now prints its variable as T; before the call it prints $.1)."
+   }
+  ],
+  "test_code": "print \"  polredabs\";\nR<x> := PolynomialRing(Rationals());\n// LMFDB nf_fields oracle values (SELECT label,coeffs FROM nf_fields WHERE label IN\n// ('2.0.7.1','3.1.23.1','4.0.229.1','5.5.14641.1')): coeffs are the polredabs polynomial\nassert polredabs([8,-2,1]) eq [2,-1,1];              // x^2-2x+8 defines 2.0.7.1 = Q(sqrt(-7))\nassert polredabs(x^2-2*x+8) eq x^2-x+2;\nK := NumberField(x^3-x^2+1);                          // 3.1.23.1\nassert polredabs(MinimalPolynomial(K.1+2)) eq x^3-x^2+1;\nK := NumberField(x^4-x+1);                            // 4.0.229.1\nassert polredabs(MinimalPolynomial(K.1+3)) eq x^4-x+1;\n// minimal polynomial of 2*cos(2*pi/11) (classical) reduces to LMFDB 5.5.14641.1\nassert polredabs(x^5+x^4-4*x^3-3*x^2+3*x+1) eq x^5-x^4-4*x^3+3*x^2+3*x-1;\n// cyclotomic fixed points and idempotence\nfor n in [5,7,8,12,16] do\n    c := polredabs(CyclotomicPolynomial(n));\n    assert c eq polredabs(c);                         // idempotent\n    assert IsIsomorphic(NumberField(c),CyclotomicField(n));\nend for;\n// isomorphic-field invariance: any defining polynomial of the field gives the same result\nK := NumberField(x^3-x-2);\nassert #{polredabs(MinimalPolynomial(K.1+j)) : j in [0..2]} eq 1;\n// DiscFactors branch of the gp command\nassert polredabs(x^2-5:DiscFactors:=[2,5]) eq x^2-x-1;\n// reducible (etale, squarefree) input is supported by modern pari\nassert polredabs([-1,0,1]) eq [0,-1,1];               // x^2-1 -> x^2-x\n// rational coefficients\nassert polredabs([1/2,1/2,1]) eq [2,-1,1];            // x^2+x/2+1/2 defines Q(sqrt(-7))\n// non-monic input\nassert polredabs(9*x^2-6*x-4) eq x^2-x-1;             // defines Q(sqrt(5))\n// FldNum and FldRat signatures\nL := polredabs(NumberField(x^2-2*x+8));\nassert DefiningPolynomial(L) eq x^2-x+2;\nassert polredabs(Rationals()) cmpeq Rationals();\n\nprint \"  polredbest\";\ng := polredbest(x^2-2*x+8);\nassert Degree(g) eq 2 and IsIsomorphic(NumberField(g),NumberField(x^2-2*x+8));\nassert polredbest([8,-2,1]) eq Eltseq(polredbest(x^2-2*x+8));\nassert Degree(polredbest(x^2-5:DiscFactors:=[2,5])) eq 2;\nM := polredbest(NumberField(x^3-x-2));\nassert IsIsomorphic(M,NumberField(x^3-x-2));\n\nprint \"  PerfectPowerBase\";\nassert PerfectPowerBase(0) eq 0 and PerfectPowerBase(1) eq 1;\nassert PerfectPowerBase(64) eq 2;                     // least base: 2^6 (not 8^2)\nassert PerfectPowerBase(729) eq 3;\nassert PerfectPowerBase(46656) eq 6;                  // 6^6 = 216^2 = 36^3, least base is 6\nassert PerfectPowerBase(2^6*3^4) eq 72;               // gcd of exponents is 2: 72^2\nassert PerfectPowerBase(12) eq 12;                    // not a perfect power\nassert forall{n : n in [2..100] | PerfectPowerBase(n)^Round(Log(PerfectPowerBase(n),n)) eq n};\n\nprint \"  IsPolredabsCandidate\";\nZ<t> := PolynomialRing(Integers());\nassert IsPolredabsCandidate(t^2-5);\nassert IsPolredabsCandidate([-5,0,1]);\nassert not IsPolredabsCandidate(t^65-2);              // degree > 64\n// discriminant 4pq with p,q 60-digit primes: not factorable, not prime => false\np := 100000000000000000000000000000000000000000000000000000000019; // NextPrime(10^59)\nq := 300000000000000000000000000000000000000000000000000000000017; // NextPrime(3*10^59+11)\nassert IsPrime(p) and IsPrime(q);\nassert not IsPolredabsCandidate(t^2-p*q);\n// large prime discriminant is fine (IsProbablePrime branch)\nassert IsPolredabsCandidate(t^2-NextPrime(10^100));\n\nprint \"  polredbestify\";\nh, b := polredbestify(x^2-2*x+8);\nassert b and h eq x^2-x+2;                            // candidate => polredabs result\nhs, bs := polredbestify([8,-2,1]);\nassert bs and hs eq [2,-1,1];                         // SeqEnum version returns Eltseq\nh, b := polredbestify(x^5+x^4-4*x^3-3*x^2+3*x+1);\nassert b and h eq x^5-x^4-4*x^3+3*x^2+3*x-1;\n\nprint \"  polredbestwithroot\";\nf := x^4+24*x^2+144*x+300;\ng, r := polredbestwithroot(f);\nassert Degree(g) eq 4 and Evaluate(f,NumberField(g)!r) eq 0;\ng, r := polredbestwithroot(9*x^2-6*x-4);              // non-monic, rational root coords\nassert Evaluate(9*x^2-6*x-4,NumberField(g)!r) eq 0;\n\nprint \"  polredabswithroot\";\ng, r := polredabswithroot(f);\nassert g eq polredabs(f) and Evaluate(f,NumberField(g)!r) eq 0;\ng, r := polredabswithroot(9*x^2-6*x-4);\nassert g eq x^2-x-1 and Evaluate(9*x^2-6*x-4,NumberField(g)!r) eq 0;\n\nprint \"  polredbestifywithroot\";\ng, r, b := polredbestifywithroot(f);\nassert b and g eq polredabs(f) and Evaluate(f,NumberField(g)!r) eq 0;\n// non-candidate path exercises the polredbest loop and hom composition\nf2 := (x-1)^2 - p*q;\ng, r, b := polredbestifywithroot(f2);\nassert not b and Degree(g) eq 2 and Evaluate(f2,NumberField(g)!r) eq 0;\n\nprint \"  nfisincl\";\n// NB: currently only reliable when the ambient polynomial ring prints its variable as \"x\"\ne := nfisincl(x^2+1,x^4+1);                           // Q(i) in Q(zeta_8): 2 embeddings\nL := NumberField(x^4+1);\nassert #e eq 2 and forall{h0 : h0 in e | Evaluate(x^2+1,Evaluate(h0,L.1)) eq 0};\ne := nfisincl(x^2+2,x^4+1);                           // Q(sqrt(-2)) in Q(zeta_8)\nassert #e eq 2 and forall{h0 : h0 in e | Evaluate(x^2+2,Evaluate(h0,L.1)) eq 0};\nassert #nfisincl(x^2+1,x^4+2) eq 0;                   // gp returns 0: no embedding\nassert #nfisincl(x^3-2,x^4+1) eq 0;                   // degree non-divisibility early exit\ne := nfisincl(x^2-x-1,x^2-5);                         // embeddings with rational coefficients\nL := NumberField(x^2-5);\nassert #e eq 2 and forall{h0 : h0 in e | Evaluate(x^2-x-1,Evaluate(h0,L.1)) eq 0};\ne := nfisincl(x-3,x^2-2);                             // degree-1 shortcut, matches gp: [3]\nassert #e eq 1 and e[1] eq 3;\nes := nfisincl([-1,-1,1],[-5,0,1]);                   // SeqEnum version: coefficient vectors\nassert #es eq 2 and forall{c : c in es | Evaluate(x^2-x-1,Evaluate(Polynomial(c),L.1)) eq 0};\nassert #nfisincl([1,0,1],[2,0,0,0,1]) eq 0;           // empty path\nassert #nfisincl([-2,0,0,1],[1,0,0,0,1]) eq 0;        // non-divisibility early exit\ne := nfisincl(x^2+1,x^2+1);                           // automorphisms of Q(i)\nassert #e eq 2 and Set(e) eq {x,-x};",
+  "coverage_notes": "Tested empirically (all 4 polredabs overloads, all 3 polredbest overloads, PerfectPowerBase, both IsPolredabsCandidate overloads, both polredbestify overloads, polredbestwithroot, polredabswithroot, polredbestifywithroot both code paths, both nfisincl overloads) \u2014 the fragment runs in ~1.2s from the repo root. Oracles: gp 2.18.1 directly, LMFDB nf_fields coeffs (labels 2.0.7.1, 3.1.23.1, 4.0.229.1, 5.5.14641.1; coeffs ARE the polredabs polynomial, so this is an end-to-end external check of the parsing pipeline), idempotence, isomorphic-field invariance, and direct root-evaluation checks for the withroot variants (including non-monic input with rational root coordinates exercising StringToRational parsing). Both branches of the gp command (with/without DiscFactors) are exercised for polredabs and polredbest. polredbestifywithroot's non-candidate loop path (hom composition through polredbest iterations) is exercised with a 120-digit-semiprime discriminant and its root verified. Checked but not test-asserted: gp does NOT wrap long output lines when piped (print(2^2000), 200-entry vectors, polcyclo(1000) all one line), so the '[...]'-slicing in get_gp_coeffs and the withroot parsers is safe on this gp build; Magma's PollardRho/ECM inside IsPolredabsCandidate have bounded effort (0.13s on unfactorable 120-digit input). Read but not deeply tested: get_gp_mat (dead code \u2014 not referenced anywhere in the package, grep confirmed); relative number fields into polredabs(FldNum) (would garble the gp command, but arguably out of documented scope \u2014 not filed); DiscFactors given as non-prime lists or tuple factorizations (format undocumented, not filed). The nfisincl tests deliberately use a ring whose variable prints as x, since the variable-name bug (finding 2) makes any other name fail; regression tests for findings 1-3 should be added by the owner after fixing (assertions demonstrating each are in the findings' evidence, excluded from test_code because they currently fail or hang)."
+ }
+]
