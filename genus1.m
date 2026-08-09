@@ -1,7 +1,7 @@
 freeze;
 /*
     Dependencies: utils.m
-    Various utility functions for working with genus 1 curves, including elliptic curves, mostly over Q and over finite fields).
+    Various utility functions for working with genus 1 curves, including elliptic curves, mostly over Q and over finite fields.
 
     Copyright (c) Andrew V. Sutherland, 2019-2025.  See License file for details on copying and usage.
 */
@@ -50,7 +50,7 @@ intrinsic LMFDBLabel(CremonaLabel::MonStgElt) -> MonStgElt
 end intrinsic;
 
 intrinsic EllipticCurvesOfConductorDividing(N::RngIntElt) -> SeqEnum[CrvEll]
-{ Returns a list of elliptic curves over Q whose conductor divides N. }
+{ Returns a list of elliptic curves over Q, one representative per isogeny class (the first curve in each Cremona class), whose conductor divides N. }
     return &cat[[E:E in EllipticCurves(D,M)|n eq 1 where _,_,n := CremonaReferenceData(D,E)]:M in Divisors(N)] where D:=CremonaDatabase();
 end intrinsic;
 
@@ -63,7 +63,7 @@ intrinsic EllipticCurvesOfNaiveHeightBoundedBy (H::RngIntElt) -> SeqEnum[SeqEnum
 end intrinsic;
 
 intrinsic MinimalShortWeierstrassModel(E::CrvEll[FldRat]) -> CrvEll[FldRat]
-{ Given an elliptic curve E/Q returns an elliptic curve in short Weierstrass form y^2 = x^3 + Ax + B with A and B minmal (no prime p with p^4|A and p^6|B). }
+{ Given an elliptic curve E/Q returns an elliptic curve in short Weierstrass form y^2 = x^3 + Ax + B with A and B minimal (no prime p with p^4|A and p^6|B). }
     E := WeierstrassModel(MinimalModel(IntegralModel(E)));
     a := Coefficients(E); assert a[1] eq 0 and a[2] eq 0 and a[3] eq 0;
     A := Integers()!a[4]; B:=Integers()!a[5];
@@ -89,6 +89,7 @@ end intrinsic;
 intrinsic PrimitiveDivisionPolynomial2 (E::CrvEll, n::RngIntElt) -> RngUPolElt
 { The primitive division polynomial of the j-invariant 1728 curve E with x^2 replaced by x. }
     require jInvariant(E) eq 1728: "E must have jInvariant 1728";
+    require n ne 2: "the primitive 2-division polynomial has x=0 as a root and is not a polynomial in x^2";
     f := PrimitiveDivisionPolynomial(E,n);
     return Parent(f)![Coefficient(f,m):m in [0..Degree(f)]|IsEven(m)];
 end intrinsic;
@@ -96,13 +97,14 @@ end intrinsic;
 intrinsic PrimitiveDivisionPolynomial3 (E::CrvEll, n::RngIntElt) -> RngUPolElt
 { The primitive division polynomial of the j-invariant 0 curve E with x^3 replaced by x. }
     require jInvariant(E) eq 0: "E must have jInvariant 0";
+    require n ne 3: "the primitive 3-division polynomial has x=0 as a root and is not a polynomial in x^3";
     f := PrimitiveDivisionPolynomial(E,n);
     return Parent(f)![Coefficient(f,m):m in [0..Degree(f)]|m mod 3 eq 0];
 end intrinsic;
 
-intrinsic IsogenyOrbits (E::CrvEll, n::RngIntElt) -> RngIntElt
+intrinsic IsogenyOrbits (E::CrvEll, n::RngIntElt) -> SetMulti
 { The multiset of sizes of Galois orbits of cyclic isogenies of degree n. }
-    if n eq 1 then return 1; end if;
+    if n eq 1 then return {* 1 *}; end if;
     require havemodpoly(n): Sprintf("modular polynomial not available for n = %o", n);
     R<x> := PolynomialRing(BaseRing(E));
     return {* Degree(a[1])^^a[2] :a in Factorization(Evaluate(ModularPolynomial(n),[jInvariant(E),x])) *};
@@ -117,7 +119,7 @@ intrinsic IsogenyDegree (E::CrvEll, n::RngIntElt) -> RngIntElt
     return m;
 end intrinsic;
 
-intrinsic IsogenyGaloisGroup (E::CrvEll, n::RngIntElt) -> RngIntElt
+intrinsic IsogenyGaloisGroup (E::CrvEll, n::RngIntElt) -> GrpPerm
 { The Galois group of the minimal extension over which all cyclic n-isogenies from E are defined. }
     if n eq 1 then return CyclicGroup(1); end if;
     require havemodpoly(n): Sprintf("ClassicalModularPolynomial not available for n = %o",n);
@@ -125,10 +127,10 @@ intrinsic IsogenyGaloisGroup (E::CrvEll, n::RngIntElt) -> RngIntElt
     return GaloisGroup(Evaluate(ModularPolynomial(n),[jInvariant(E),x]));
 end intrinsic;
 
-intrinsic KummerOrbits (E::CrvEll, n::RngIntElt) -> RngIntElt
+intrinsic KummerOrbits (E::CrvEll, n::RngIntElt) -> SetMulti
 { The multiset of sizes of Galois orbits of E[n] for an elliptic curve E. }
     require n gt 0: "n must be positive.";
-    if n eq 1 then return 1; end if;
+    if n eq 1 then return {* 1 *}; end if;
     A := Factorization(PrimitiveDivisionPolynomial(E,n));
     return {* Degree(a[1])^^a[2] : a in A *};
 end intrinsic;
@@ -137,7 +139,8 @@ end intrinsic;
 // Used by TorsionOrbits
 function sqmodtest(f,g,n)
     // check squareness modulo a bunch of small primes coprime to n (square testing in char zero is expensive)
-    K := BaseRing(g);  if K eq Rationals() then K := RationalsAsNumberField(); end if;
+    K := BaseRing(g);  if Type(K) eq FldRat then K := RationalsAsNumberField(); end if;
+    if Type(K) ne FldNum then return true; end if; // this pretest only applies to number fields (returning true is safe, callers verify)
     c := 0;
     for p in PrimesInInterval(K,1,n) do
         F,phi := ResidueClassField(p); R := PolynomialRing(F);
@@ -173,10 +176,10 @@ function fsqmod(f,g,n)
     return ssqmod(f,g,n);
 end function;
 
-intrinsic TorsionOrbits (E::CrvEll, n::RngIntElt:slow:=false) -> RngIntElt
+intrinsic TorsionOrbits (E::CrvEll, n::RngIntElt:slow:=false) -> SetMulti
 { The multiset of sizes of Galois orbits of E[n] for an elliptic curve E. }
     require n gt 0: "n must be positive.";
-    if n eq 1 then return 1; end if;
+    if n eq 1 then return {* 1 *}; end if;
     E := WeierstrassModel(E);  f := HyperellipticPolynomials(E);
     psi := PrimitiveDivisionPolynomial(E,n);
     A := Factorization(psi);
@@ -200,11 +203,11 @@ intrinsic TorsionDegree (E::CrvEll, n::RngIntElt:slow:=false) -> RngIntElt
                   else Min([(fsqmod(f,a[1],n) select 1 else 2)*Degree(a[1]) : a in A | Degree(a[1]) lt 2*d]);
 end intrinsic;
 
-intrinsic PrimitiveTorsionPolynomial (E::CrvEll, n::RngIntElt) -> RngIntElt
+intrinsic PrimitiveTorsionPolynomial (E::CrvEll, n::RngIntElt) -> RngUPolElt
 { Polynomial whose splitting field is the n-torsion field of E. }
     require n gt 0: "n must be positive.";
-    if n eq 1 then return 1; end if;
     E := WeierstrassModel(E);  f := HyperellipticPolynomials(E);
+    if n eq 1 then return Parent(f).1; end if;
     if n eq 2 then return f; end if;
     R<X,Y> := PolynomialRing(BaseRing(f),2);
     g := PrimitiveDivisionPolynomial(E,n);               // roots of g are all x-coords of points of order n
@@ -212,7 +215,7 @@ intrinsic PrimitiveTorsionPolynomial (E::CrvEll, n::RngIntElt) -> RngIntElt
     return Evaluate(h,[0,Parent(g).1])*g;
 end intrinsic;
 
-intrinsic TorsionGaloisGroup (E::CrvEll, n::RngIntElt) -> RngIntElt
+intrinsic TorsionGaloisGroup (E::CrvEll, n::RngIntElt) -> GrpPerm
 { Galois group of the n-torsion field of E (this can be extremely expensive, use with caution). }
     return GaloisGroup(PrimitiveTorsionPolynomial(E,n));
 end intrinsic;
@@ -222,7 +225,7 @@ intrinsic FullTorsionDegree (E::CrvEll, n::RngIntElt) -> RngIntElt
     return #TorsionGaloisGroup(E,n);
 end intrinsic;
 
-intrinsic TorsionField (E::CrvEll, n::RngIntElt) -> RngIntElt
+intrinsic TorsionField (E::CrvEll, n::RngIntElt) -> Fld
 { The n-torsion field of E/K, where K is a number field (this can be extremely expensive, use with caution). }
     K,_ := SplittingField(PrimitiveTorsionPolynomial(E,n));
     return K;
@@ -339,8 +342,8 @@ function ClimbToSurface(j,ell,h)
     return j,d;
 end function;
 
-intrinsic PrecomputeEndomorphismRingData(B::RngIntElt) -> Assoc
-{ Returns an associative array of precomputed Frobenius matrices for elliptic curves y^2=x^3+Ax+B over Fp with B square and j!=0,1728 for 3 < p < B (one twist for each j!=0,1728). }
+intrinsic PrecomputeEndomorphismRingData(B::RngIntElt) -> SeqEnum
+{ Returns a nested sequence Z with Z[p][j] = [a,b,D] of precomputed endomorphism ring data for elliptic curves y^2=x^3+Ax+B over Fp with B square and j!=0,1728 for 3 < p <= B (one twist for each j!=0,1728). }
     Z := [[]:i in [1..B]];
     for p in PrimesInInterval(5,B) do
         Z[p] := [[Integers()|]:i in [1..p]];
@@ -415,7 +418,7 @@ intrinsic FrobeniusMatrices(E::CrvEll[FldRat], B::RngIntElt:B0:=1) -> SeqEnum[Al
 end intrinsic;
 
 intrinsic FrobeniusMatrices(E::CrvEll[FldNum], B::RngIntElt:B0:=1) -> SeqEnum[AlgMatElt[RngInt]]
-{ Given an elliptic curve E/Q and a bound B returns a list of 2-by-2 integer matrices A of determinant p (for primes p <= B of good reduction) whose reduction modulo any integer N coprime to det(A) gives the action of Frobenius on (E mod p)[N] with respect to some basis. }
+{ Given an elliptic curve E over a number field K and a bound B returns a list of 2-by-2 integer matrices A of determinant Norm(p) (for primes p of K of good reduction with norm in [B0,B]) whose reduction modulo any integer N coprime to det(A) gives the action of Frobenius on (E mod p)[N] with respect to some basis. }
     K := BaseRing(E); D := RingOfIntegers(BaseRing(E))!Discriminant(E);
     return [FrobeniusMatrix(Reduction(E,p)) : p in PrimesInInterval(K,B0,B:coprime_to:=D)];
 end intrinsic;
@@ -509,7 +512,7 @@ intrinsic PossiblyNonsurjectivePrimes(E::CrvEll[FldNum]:A:=[],B:=1024) -> SeqEnu
 { Given an elliptic curve E over a number field K, returns a list of primes ell <= B for which the ell-adic representation attached to E could be non-surjective (the ell-adic representation could be surjective for some of these primes and could be non-surjective at some primes > B).  Based on Algorithm 6 in https://arxiv.org/abs/1504.07618. }
     require not HasComplexMultiplication(E): "E must be non-CM";
     require B ge 7: "B must be at least 7";
-    if #A eq 0 then A := GL2FrobeniusMatrices(E,256); end if;
+    if #A eq 0 then A := FrobeniusMatrices(E,256); end if;
     S := {l : l in PrimesInInterval(11,B)}; X := [0:i in [1..B]];
     for a in A do
         t := Trace(a); d := Determinant(a);
@@ -517,6 +520,9 @@ intrinsic PossiblyNonsurjectivePrimes(E::CrvEll[FldNum]:A:=[],B:=1024) -> SeqEnu
         T := [];
         for l in S do
             if IsDivisibleBy(d,l) then continue; end if;
+            // skip elements of trace 0 mod l: they lie in both Cartan normalizers (and give u=0,
+            // the projective order 2 case present in every exceptional group), so they cannot witness anything
+            if IsDivisibleBy(t,l) then continue; end if;
             x := KroneckerSymbol(c,l); if x eq 0 then continue; end if;
             X[l] := BitwiseOr(X[l],x eq 1 select 1 else 2);
             if X[l] eq 7 then Append(~T,l); continue; end if;

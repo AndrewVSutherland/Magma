@@ -29,8 +29,8 @@ intrinsic polredabs(K::FldNum:DiscFactors:=[]) -> FldNum
     return NumberField(polredabs(DefiningPolynomial(K):DiscFactors:=DiscFactors));
 end intrinsic;
 
-intrinsic polredabs(K::FldRat:DiscFactors:=[]) -> FldNum
-{ Given a number field returns the same number field defined using a canonical defining polynomial using pari. }
+intrinsic polredabs(K::FldRat:DiscFactors:=[]) -> FldRat
+{ Given the rational field returns it unchanged. }
     return K;
 end intrinsic;
 
@@ -47,7 +47,7 @@ intrinsic polredbest(f::RngUPolElt:DiscFactors:=[]) -> RngUPolElt
 end intrinsic;
 
 intrinsic polredbest(K::FldNum:DiscFactors:=[]) -> FldNum
-{ Given a number field returns the same number field defined using a canonical defining polynomial using pari. }
+{ Given a number field returns the same number field defined using a small (non-canonical) defining polynomial using pari. }
     return NumberField(polredbest(DefiningPolynomial(K):DiscFactors:=DiscFactors));
 end intrinsic;
 
@@ -65,6 +65,8 @@ intrinsic IsPolredabsCandidate (f::RngUPolElt) -> BoolElt
     n := PerfectPowerBase(Integers()!AbsoluteValue(Discriminant(f)));
     if n le 10^80 then return true; end if;
     _,s := TrialDivision(n,10^6);
+    // in Magma V2.29-9 the second return value of TrialDivision became a bare integer cofactor (1 when none); earlier versions returned [] or [c]
+    if Type(s) eq RngIntElt then s := s eq 1 select [Integers()|] else [s]; end if;
     if #s eq 0 then return true; end if;
     n := PerfectPowerBase(Max(s));
     _,s := PollardRho(n);
@@ -80,24 +82,24 @@ intrinsic IsPolredabsCandidate (f::RngUPolElt) -> BoolElt
     return n le 10^80 or IsProbablePrime(n);
 end intrinsic;
 
-intrinsic IsPolredabsCandidate (f::SeqEnum) -> SeqEnum
+intrinsic IsPolredabsCandidate (f::SeqEnum) -> BoolElt
 { Returns true if the polynomial looks like Polredabs can easily handle it. }
     return IsPolredabsCandidate(PolynomialRing(Integers())!f);
 end intrinsic;
 
 intrinsic polredbestify (f::RngUPolElt:DiscFactors:=[]) -> RngUPolElt, BoolElt
-{ Call polredbest repeatedly to get s smaller defining polynomial for the etale algebra Q[x]/(f(x)) using pari. } 
+{ Call polredbest repeatedly to get a smaller defining polynomial for the etale algebra Q[x]/(f(x)) using pari. }
     for n:=1 to 5 do
         g := f;
         f := polredbest(g:DiscFactors:=DiscFactors);
         if f eq g then break; end if;
     end for;
-    if #DiscFactors gt 0 then return polredabs(f),true; end if;
+    if #DiscFactors gt 0 then return polredabs(f:DiscFactors:=DiscFactors),true; end if;
     if IsPolredabsCandidate(f) then return polredabs(f),true; else return f,false; end if;
 end intrinsic;
 
-intrinsic polredbestify (f::SeqEnum:DiscFactors:=[]) -> RngUPolElt, BoolElt
-{ Call polredbest repeatedly to get s smaller defining polynomial for the etale algebra Q[x]/(f(x)) using pari. } 
+intrinsic polredbestify (f::SeqEnum:DiscFactors:=[]) -> SeqEnum, BoolElt
+{ Call polredbest repeatedly to get a smaller defining polynomial for the etale algebra Q[x]/(f(x)) using pari. }
     f,b := polredbestify(PolynomialRing(Integers())!f:DiscFactors:=DiscFactors);
     return Eltseq(f),b;
 end intrinsic;
@@ -162,20 +164,19 @@ intrinsic nfisincl(f::RngUPolElt,g::RngUPolElt) -> SeqEnum[RngUPolElt]
     g := ChangeRing(g,Rationals());
     x := Parent(g).1;
     if Degree(f) eq 1 then return [Parent(g)!Roots(f)[1][1]]; end if;
-    cmd:=Sprintf("{print(nfisincl(%o,%o))}",f,g);
+    cmd:=Sprintf("{print(nfisincl(Pol(Vecrev(%o)),Pol(Vecrev(%o))))}",Coefficients(f),Coefficients(g));
     function strip(s) return Join(Split(Join(Split(s," "),""),"\n"),""); end function;
     s := strip(Pipe("gp -q", cmd));
     if s eq "0" then return [Parent(g)|]; end if;
-    R<T>:=PolynomialRing(Integers());
     s := eval(s);
     return [Parent(g)!Coefficients(h):h in s];
 end intrinsic;
 
-intrinsic nfisincl(f::SeqEnum,g::SeqEnum) -> SeqEnum[RngUPolElt]
-{ Returns a list of polynomials defining embeddings of the number field K defined by f in the number field L defined by g (each is specified by a polynomial h for which h(L.1) is a generator for the embedding of K in L). }
+intrinsic nfisincl(f::SeqEnum,g::SeqEnum) -> SeqEnum[SeqEnum]
+{ Returns a list of embeddings of the number field K defined by f in the number field L defined by g (each is specified by the coefficient sequence of a polynomial h for which h(L.1) is a generator for the embedding of K in L). }
     if not IsDivisibleBy(#g-1,#f-1) then return []; end if;
-    R<x>:=PolynomialRing(Rationals());
-    if #f eq 2 then return [R!Roots(R!f)[1][1]]; end if;
+    R<x>:=PolynomialRing(Rationals():Global:=false); // do not rename the print variable of the session-global ring
+    if #f eq 2 then return [[Roots(R!f)[1][1]]]; end if;
     cmd:=Sprintf("{print(nfisincl(%o,%o))}",R!f,R!g);
     function strip(s) return Join(Split(Join(Split(s," "),""),"\n"),""); end function;
     s := strip(Pipe("gp -q", cmd));

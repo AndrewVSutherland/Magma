@@ -1,0 +1,73 @@
+{
+ "all_green": true,
+ "results": [
+  {
+   "test_file": "tests/test_utils.m",
+   "passed": true,
+   "runtime_seconds": 3.1,
+   "notes": "Already followed convention; no edits needed."
+  },
+  {
+   "test_file": "tests/test_chars.m",
+   "passed": true,
+   "runtime_seconds": 17.2,
+   "notes": "Already followed convention; slowest test (character orbit computations)."
+  },
+  {
+   "test_file": "tests/test_gl2base.m",
+   "passed": true,
+   "runtime_seconds": 7.7,
+   "notes": "Already followed convention; largest test file (98KB, six auditor fragments)."
+  },
+  {
+   "test_file": "tests/test_mfdims.m",
+   "passed": true,
+   "runtime_seconds": 3.7,
+   "notes": "Already followed convention."
+  },
+  {
+   "test_file": "tests/test_gl2points.m",
+   "passed": true,
+   "runtime_seconds": 2.4,
+   "notes": "Already followed convention."
+  },
+  {
+   "test_file": "tests/test_gl2tab.m",
+   "passed": true,
+   "runtime_seconds": 0.6,
+   "notes": "Already followed convention."
+  },
+  {
+   "test_file": "tests/test_genus1.m",
+   "passed": true,
+   "runtime_seconds": 1.2,
+   "notes": "Already followed convention."
+  },
+  {
+   "test_file": "tests/test_genus2euler.m",
+   "passed": true,
+   "runtime_seconds": 0.2,
+   "notes": "Already followed convention."
+  },
+  {
+   "test_file": "tests/test_tracehash.m",
+   "passed": true,
+   "runtime_seconds": 6.2,
+   "notes": "Already followed convention."
+  },
+  {
+   "test_file": "tests/test_mfutils.m",
+   "passed": true,
+   "runtime_seconds": 0.1,
+   "notes": "Already followed convention. Sub-second runtimes are genuine: Magma .sig package caches (gitignored via *.sig) make AttachSpec nearly instant; verified by a timed direct run (0.107s wall)."
+  },
+  {
+   "test_file": "tests/test_polredabs.m",
+   "passed": true,
+   "runtime_seconds": 1.2,
+   "notes": "Already followed convention."
+  }
+ ],
+ "source_interventions": [],
+ "summary": "All 11 expected test files (one per audited source module) were present in /home/claude/Magma/tests and already followed the convention exactly (AttachSpec(\\\"magma.spec\\\"), asserts, final 'ALL TESTS PASSED <name>' print, quit) \u2014 no test files needed fixing and none were missing. I wrote /home/claude/Magma/tests/run_tests.sh (chmod +x): runs every tests/test_*.m from the repo root with 'timeout 600 magma -b', parallel via xargs -P (default -j4, overridable with -jN), per-test logs in tests/logs/, pass iff the log contains the test's ALL TESTS PASSED line, summary table with per-test seconds, nonzero exit on any failure. Appended tests/logs/, tests/tmp_*, and gl2classno.dat to /home/claude/Magma/.gitignore. Wrote /home/claude/Magma/tests/README.md with run instructions, conventions for adding tests, a per-module coverage table from the owner reports, and the known flagged-but-unfixed limitations (tracehash missing TracesOfFrobenius signatures / hashcurves binary, utils split Sage path, GL2MinimalConjugate ordering bug, polredabs silent gp-error swallowing). Full fresh run via './tests/run_tests.sh -j6': 11/11 PASS, ~17s wall (dominated by test_chars.m). Verified all logs end with genuine pass lines, confirmed the fast runtimes are due to cached .sig package compilation (timed direct run of test_mfutils.m: 0.107s), and validated the runner's failure path with a synthetic failing test (correctly reported FAIL and exit code 1, then removed). No source edits or reverts were needed \u2014 every owner fix held up under the integrated run. Nothing was committed; all changes remain in the working tree."
+}
