@@ -1,0 +1,42 @@
+<!doctype html><html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GL2MinimalConjugate: analysis and fix</title>
+<style>
+:root { color-scheme: light dark; }
+body { font: 16px/1.55 system-ui, sans-serif; max-width: 60em; margin: 2em auto; padding: 0 1em; }
+@media (prefers-color-scheme: dark) { body { background:#111; color:#ddd; } a { color:#8cf; } }
+h1,h2,h3 { line-height:1.25; } h2 { border-bottom:1px solid #8884; padding-bottom:.2em; margin-top:2em; }
+code { background:#8882; padding:.1em .3em; border-radius:3px; font-size:.92em; }
+pre { background:#8882; padding:.7em; border-radius:5px; overflow-x:auto; }
+table { border-collapse: collapse; } td,th { border:1px solid #8886; padding:.3em .6em; }
+li { margin:.35em 0; }
+</style></head><body>
+<h1>GL2MinimalConjugate: bug analysis, label-safety verification, and fix</h1>
+<p><strong>Date:</strong> 2026-08-09 · <strong>Method:</strong> three parallel investigations (paper-repo comparison, level-scope brute force, label-impact analysis against LMFDB <code>gps_gl2zhat_fine</code>), all claims below verified by executed Magma (V2.29-9) transcripts.</p>
+<h2>The bug</h2>
+<p><code>GL2MinimalConjugate</code> (gl2base.m) enumerates the conjugates of <code>H</code> in <code>GL(2,Z/N)</code> (N = level of H) and returns the one whose <code>GL2MinimalGenerators</code> sequence is lex-minimal, where matrices compare as <code>Eltseq</code> quadruples <code>[a,b,c,d]</code>. To avoid computing minimal generators for every conjugate, a pruning step first discarded conjugates via <code>A := [Min([k:k in K]):K in S]</code> — <strong>Magma's internal <code>GrpMatElt</code> ordering, not <code>Eltseq</code> ordering</strong>. When the two orders disagree, the pruning can discard the conjugate containing the true Eltseq-minimal elements, and the returned generator sequence is not minimal.</p>
+<h2>Mechanism and scope: only modulus 4, ever</h2>
+<p>Magma's element comparison over <code>Integers(4)</code> — and <strong>only</strong> <code>Integers(4)</code> among all moduli tested — is not Eltseq-lex: Z/4 matrix rows are stored packed (2 bits per entry) and compared little-endian <em>within</em> each row, so the effective sort key is <code>(b,a,d,c)</code> instead of <code>(a,b,c,d)</code>. Verified exhaustively on all 256 matrices / 16 vectors over Z/4; full inversion census at N = 2..16 finds discordance only at N = 4 (1440 unordered pairs); moduli 32, 49, 121, 169 and every modulus relevant to the RSZB data verified concordant (full vector sorts plus 20k–500k random pairs each).</p>
+<p>Where the orders agree, the shipped pruning is provably equivalent to correct pruning. Empirically: <strong>12 of 58</strong> conjugacy classes of level-4 subgroups of <code>GL(2,Z/4)</code> returned non-minimal results (e.g. <code>sub&lt;GL(2,Z/4)|[3,2,0,3]&gt;</code> → <code>[[3,0,2,3]]</code> instead of <code>[[1,2,2,1]]</code>); <strong>0 wrong out of ~38,000+ classes</strong> at every other level tested (exhaustive N = 2..13, 15, 16; index ≤ 96 at N = 20, 24, 25, 27, 32; all RSZB-table groups at levels 25, 27, 49 and the level-32 tables). Since <code>GL2Level</code> reduces first, only groups of true level exactly 4 are affected — at any ambient modulus.</p>
+<h2>Why no published or beta label is affected</h2>
+<ol>
+<li><strong>The RSZB paper labels were computed with different, correct code.</strong> The paper repo's <code>GL2MinimalConjugate</code> (<code>ell-adic-galois-images/groups/gl2.m:1311–1324</code>) takes <code>Min([Sort([Eltseq(h):h in K]):K in S])</code> over all surviving conjugates — pure Eltseq, no pruning — and is byte-identical in every commit from 2021-06-21 through HEAD. The buggy pruning first appears in this repo's rewrite of 2024-12-19.</li>
+<li><strong>The tiebreaker never fires at level 4.</strong> In the RSZB <code>GL2Lattice</code> sort, <code>GL2MinimalConjugate</code> is the tiebreaker of last resort, consulted only when groups tie on (level, index, genus), parent-label list, orbit signature, <em>and</em> class signature. Among the 39 level-4 groups in the RSZB dataset, the only cohort tying through orbit signatures — {4.6.0.2, 4.6.0.3, 4.6.0.4} — is separated by class signatures.</li>
+<li><strong>Where the tiebreaker does fire, buggy = fixed.</strong> It fires for 1,103 labels in 446 tie-sets (levels 8–121, all prime-power; complete list in <code>tiebreaker-dependent-labels.txt</code>). In every one, the current code, the fixed code, and the paper code produce identical orderings that reproduce the published <code>.n</code> assignments exactly (concordant moduli).</li>
+<li><strong>Beta LMFDB.</strong> <code>gps_gl2zhat_fine</code>'s primary labels (<code>N.i.g.c.n</code> scheme) never consult <code>GL2MinimalConjugate</code> (no call sites, no stored minimal-conjugate data, and the RSZB pair 16.24.0.6/7 maps to 16.24.0.f.2/f.1 — opposite order — confirming an independent tiebreak). The <code>RSZBlabel</code> column (2-power levels ≤ 64) is immune: levels 8–64 are concordant, and the 39 level-4 rows never reach the tiebreaker.</li>
+</ol>
+<h2>The fix</h2>
+<p>Prune by Eltseq order, excluding the identity (which is always present and carries no information):</p>
+<pre><code>A := [Min([Eltseq(k):k in K|k ne Identity(G)]):K in S]; a := Min(A);
+S := [S[i]:i in [1..#S]|A[i] eq a];
+</code></pre>
+<p>Validated against brute force (min of <code>GL2MinimalGenerators</code> over <em>all</em> conjugates, no prefilter) with <strong>zero disagreements</strong> on every class tested, including all ~38k above. The test suite now brute-forces all level-4 classes exhaustively plus the prime-level checks.</p>
+<h2>Related: one-line fix needed in the RSZB paper repo</h2>
+<p>Under current Magma (V2.29-9), the <em>paper repo's</em> <code>GL2MinimalConjugate</code> crashes whenever <code>H</code> is normal in <code>GL(2,Z/N)</code> and contains neither <code>[0,1,1,0]</code> nor <code>[0,1,1,1]</code> (8 of 58 level-4 classes): <code>Conjugates(GL2,H)</code> returns a SetEnum, which line 1322 then indexes as <code>S[1]</code>. Fix at <code>groups/gl2.m:1318</code>:</p>
+<pre><code>S := Conjugates(GL2,H);            // before
+S := [K:K in Conjugates(GL2,H)];   // after
+</code></pre>
+<p>(Reproduced and fix verified on <code>sub&lt;GL(2,Integers(4))|[-1,0,0,-1]&gt;</code>; the patched code returns the correct <code>[[1,0,0,1],[3,0,0,3]]</code>, and <code>[[1,0,0,1],[1,2,2,1]]</code> on the audit example. Minor nit while there: the intrinsic is declared <code>-&gt; GrpMat</code> but returns a sequence of Eltseqs.)</p>
+<h2>Data</h2>
+<p><code>tiebreaker-dependent-labels.txt</code>: the 446 tie-sets (1,103 labels) whose RSZB <code>.n</code> component was decided by the minimal-conjugate tiebreaker, format <code>FIRE|&lt;det-namespace&gt;|&lt;N.i.g&gt;|&lt;comma-separated labels&gt;</code>. None of them change under the fix.</p>
+</body></html>
