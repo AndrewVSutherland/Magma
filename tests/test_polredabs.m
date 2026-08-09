@@ -35,9 +35,31 @@ assert polredabs(9*x^2-6*x-4) eq x^2-x-1;             // defines Q(sqrt(5))
 L := polredabs(NumberField(x^2-2*x+8));
 assert DefiningPolynomial(L) eq x^2-x+2;
 assert polredabs(Rationals()) cmpeq Rationals();
-// FLAGGED (audit 2026-08-06): gp errors are silently swallowed -- polredabs of a
-// non-squarefree polynomial (outside the documented etale domain) returns [] (SeqEnum
-// version) or the zero polynomial (RngUPolElt version) instead of raising an error.
+// BUG FIX (audit 2026-08-06 item 4): gp errors were silently swallowed -- polredabs of a
+// non-squarefree polynomial (outside the documented etale domain) returned [] (SeqEnum
+// version) or the zero polynomial (RngUPolElt version).  Now a Magma error is raised
+// that includes the gp error text.
+ok := false;
+try _ := polredabs([2,4,2]); catch e ok := Index(e`Object,"not an irreducible polynomial") gt 0; end try;
+assert ok;
+ok := false;
+try _ := polredabs(x^2+2*x+1); catch e ok := Index(e`Object,"not an irreducible polynomial") gt 0; end try;
+assert ok;
+ok := false;
+try _ := polredbest([2,4,2]); catch e ok := Index(e`Object,"not an irreducible polynomial") gt 0; end try;
+assert ok;
+// BUG FIX (audit 2026-08-06 item 5): the FldNum overloads now require an absolute field
+// (base field Q) instead of sending garbage coefficients to gp for relative extensions.
+Krel := NumberField(x^2-2);
+Rrel<y> := PolynomialRing(Krel);
+Lrel := ext<Krel|y^2-3>;
+ok := false;
+try _ := polredabs(Lrel); catch e ok := Index(e`Object,"absolute number field") gt 0; end try;
+assert ok;
+ok := false;
+try _ := polredbest(Lrel); catch e ok := Index(e`Object,"absolute number field") gt 0; end try;
+assert ok;
+assert DefiningPolynomial(polredabs(AbsoluteField(Lrel))) eq x^4-4*x^2+1; // 4.4.2304.1: documented workaround works
 
 print "  polredbest";
 g := polredbest(x^2-2*x+8);

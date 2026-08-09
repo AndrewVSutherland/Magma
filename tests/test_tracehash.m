@@ -62,8 +62,17 @@ assert TraceHash(func<p|p+1-#ChangeRing(C,GF(p))>) eq 639653774064676620;
 // FLAGGED (audit 2026-08-06): SlowTraceHash(C::CrvHyp), TraceHash(C::CrvPln), TraceHash(C::CrvHyp) for
 // genus != 2, TraceHash(C::CrvPln,E) and TraceHash(C::CrvHyp,E) all fail unconditionally: they call
 // TracesOfFrobenius(C,2^13:B0:=2^12), a signature that exists neither in stock Magma nor in this package.
-// FLAGGED (audit 2026-08-06): the genus 2 fast paths of TraceHash/TwistHash(C::CrvHyp) shell out to an
-// external "hashcurves" binary with no availability check (opaque Pipe error when absent); not testable here.
+// regression (item 3 fix 2026-08-09): the genus 2 fast paths of TraceHash/TwistHash(C::CrvHyp) now check
+// that the external "hashcurves" binary (smalljac) is on the PATH before calling Pipe, raising a clean
+// require error when it is absent (previously an opaque "Pipe: Subprocess failed with exit status 127")
+if System("which hashcurves > /dev/null 2>&1") ne 0 then
+    // hashcurves absent: both genus 2 fast paths must raise the clean availability error
+    ok := false; try _ := TraceHash(C); catch e ok := "hashcurves binary (smalljac)" in e`Object; end try; assert ok;
+    ok := false; try _ := TwistHash(C); catch e ok := "hashcurves binary (smalljac)" in e`Object; end try; assert ok;
+else
+    // hashcurves present: the fast path must still run and match the LMFDB trace hash for 277.a.277.1
+    assert TraceHash(C) eq 639653774064676620;
+end if;
 
 print "  TraceHashNumberField";
 // Res_{K/Q}(E_K) ~ E x E^(5), so the trace hash over K is the sum of the two rational hashes

@@ -21,7 +21,7 @@ freeze;
 
     Please cite this paper if you use this software in your research.
 
-    Copyright (c) Andrew V. Sutherland, 2019-2025.  See License file for details on copying and usage.
+    Copyright (c) Andrew V. Sutherland, 2019-2026.  See License file for details on copying and usage.
 */
 
 /*** caching ***/
@@ -1761,7 +1761,7 @@ intrinsic GL2NonsplitCartanFullNormalizer(N::RngIntElt) -> GrpMat
     return H where _,H := GL2Level(Normalizer(GL2Ambient(N),GL2NonsplitCartan(N)));
 end intrinsic;
 
-intrinsic GL2Borel(R::Rng) -> GrpMat
+intrinsic GL2Borel(R::RngIntRes) -> GrpMat
 { The standard Borel subgroup of GL(2,R) consisting of upper triangular matrices. }
     m,pi := MultiplicativeGroup(R); gm := [pi(g): g in Generators(m)];
     B := sub<GL(2,R) | [[g,0,0,1] : g in gm], [[1,0,0,g] : g in gm], [1,1,0,1]>;
@@ -1774,7 +1774,7 @@ intrinsic GL2Borel(N::RngIntElt) -> GrpMat
     return N eq 1 select gl2N1 else GL2Borel(Integers(N));
 end intrinsic;
 
-intrinsic GL2BorelPC(R::Rng) -> GrpMat, GrpPC, HomGrp
+intrinsic GL2BorelPC(R::RngIntRes) -> GrpMat, GrpPC, HomGrp
 { The standard Borel subgroup B of GL(2,R) consisting of upper triangular matrices along with a polycyclic presentation P of B and an isomorphism B -> P. }
     N := Characteristic(R);
     require N gt 0 and IsCommutative(R): "R must be a commutative ring of positive characteristic.";
@@ -1802,7 +1802,7 @@ intrinsic GL2BorelPC(N::RngIntElt) -> GrpMat, GrpPC, HomGrp
     return GL2BorelPC(Integers(N));
 end intrinsic;
 
-intrinsic GL2Borel1PC(R::Rng) -> GrpMat, GrpPC, HomGrp
+intrinsic GL2Borel1PC(R::RngIntRes) -> GrpMat, GrpPC, HomGrp
 { The Borel1 subgroup B1 of GL(2,R) consisting of upper triangular matrices with a 1 in the bottom right (not the top left!), along with a polycyclic presentation P of B and an isomorphism B1 -> P. }
     N := Characteristic(R);
     require N gt 0 and IsCommutative(R): "R must be a commutative ring of positive characteristic.";
@@ -1828,7 +1828,7 @@ intrinsic GL2Borel1PC(N::RngIntElt) -> GrpMat, GrpPC, HomGrp
     return GL2Borel1PC(Integers(N));
 end intrinsic;
 
-intrinsic SL2Borel(R::Rng) -> GrpMat
+intrinsic SL2Borel(R::RngIntRes) -> GrpMat
 { The standard Borel subgroup of SL(2,R) consisting of upper triangular matrices. }
     m,pi := MultiplicativeGroup(R); gm := Generators(m);
     B := sub<SL(2,R)|[[pi(g),0,0,pi(-g)] : g in gm], [1,1,0,1]>;
@@ -1841,7 +1841,7 @@ intrinsic SL2Borel(N::RngIntElt) -> GrpMat
     return N eq 1 select sl2N1 else SL2Borel(Integers(N));
 end intrinsic;
 
-intrinsic SL2BorelPC(R::Rng) -> GrpMat, GrpPC, HomGrp
+intrinsic SL2BorelPC(R::RngIntRes) -> GrpMat, GrpPC, HomGrp
 { The standard Borel subgroup B of SL(2,R) consisting of upper triangular matrices along with a polycyclic presentation P of B and an isomorphism B -> P. }
     N := Characteristic(R);
     require N gt 0 and IsCommutative(R): "R must be a commutative ring of positive characteristic.";
@@ -1866,7 +1866,7 @@ intrinsic SL2BorelPC(N::RngIntElt) -> GrpMat, GrpPC, HomGrp
     return SL2BorelPC(Integers(N));
 end intrinsic;
 
-intrinsic GL2Borel1(R::Rng) -> GrpMat
+intrinsic GL2Borel1(R::RngIntRes) -> GrpMat
 { The subgroup of the standard Borel subgroup of GL(2,R) that fixes a basis vector (under the left action of GL2 on column vectors), equivalently, the subgroup of upper triangular matrices in GL(2,R) with a 1 in the upper left. }
     m,pi := MultiplicativeGroup(R); gm := Generators(m);
     B1 := sub<GL(2,R) | [[1,0,0,pi(g)] : g in gm], [1,1,0,1]>;
@@ -1879,7 +1879,7 @@ intrinsic GL2Borel1(N::RngIntElt) -> GrpMat
     return N eq 1 select gl2N1 else GL2Borel1(Integers(N));
 end intrinsic;
 
-intrinsic GL2Borel12(R::Rng) -> GrpMat
+intrinsic GL2Borel12(R::RngIntRes) -> GrpMat
 { The subgroup of the standard Borel subgroup of GL(2,R) that fixes a basis vector and an independent vector of order 2, equivalently, the subgroup of upper triangular matrices in GL(2,R) with a 1 in the upper left and even entries in the upper right. }
     require IsEven(#R): "Base ring must have even cardinality";
     if #R eq 2 then return GL2FromGenerators(2,6,[]); end if;
@@ -1894,7 +1894,7 @@ intrinsic GL2Borel12(N::RngIntElt) -> GrpMat
     return N eq 1 select gl2N1 else GL2Borel12(Integers(N));
 end intrinsic;
 
-intrinsic GL2BorelK1(R::Rng) -> GrpMat
+intrinsic GL2BorelK1(R::RngIntRes) -> GrpMat
 { The subgroup of the standard Borel subgroup of GL(2,R) that stabilizes +/-v for some basis vector v (under the left action of GL2 on column vectors), equivalently, the subgroup of upper triangular matrices in GL(2,R) with +/-1 in the upper left. }
     if #R eq 2 then return GL2Borel1(R); end if;
     m,pi := MultiplicativeGroup(R); gm := Generators(m);
@@ -1908,7 +1908,7 @@ intrinsic GL2BorelK1(N::RngIntElt) -> GrpMat
     return N eq 1 select gl2N1 else GL2BorelK1(Integers(N));
 end intrinsic;
 
-intrinsic GL2BorelK12(R::Rng) -> GrpMat
+intrinsic GL2BorelK12(R::RngIntRes) -> GrpMat
 { The subgroup of the standard Borel subgroup of GL(2,R) that stabilizes +/-v for some basis vector v (under the left action of GL2 on column vectors) and fixes an independent vector of order 2, equivalently, the subgroup of upper triangular matrices in GL(2,R) with +/-1 in the upper left  and even entries in the upper right. }
     require IsEven(#R): "Base ring must have even cardinality";
     if #R eq 2 then return GL2FromGenerators(2,6,[]); end if;
@@ -1992,11 +1992,9 @@ intrinsic GL2MaximalS4(p::RngIntElt) -> GrpMat[RngIntRes]
     require IsPrime(p) and p ge 5: "p must be a prime greater than 3.";
     a := (p mod 8 in [1,7]) select 1 else 2;
     F := GF(p^2);  G := GL(2,F);
-    w := RootOfUnity(4,F);  c := Sqrt(F!2); t := G![(1+w)/c,0,0,(1-w)/c];  z := F!PrimitiveRoot(p);
+    w := RootOfUnity(4,F);  c := Sqrt(F!2);  z := F!PrimitiveRoot(p);
     if a eq 1 then
         H := ConjugateToRationalSubgroup(sub<G|[(w-1)/2,(w-1)/2,(w+1)/2,-(w+1)/2],[(1+w)/c,0,0,(1-w)/c],[z,0,0,z]>);
-    elif p mod 8 eq 1 then
-        H := ConjugateToRationalSubgroup(sub<G|[(w-1)/2,(w-1)/2,(w+1)/2,-(w+1)/2],[z*(1+w)/c,0,0,z*(1-w)/c],[z^2,0,0,z^2]>);
     else
         H := ConjugateToRationalSubgroup(sub<G|[(w-1)/2,(w-1)/2,(w+1)/2,-(w+1)/2],[u*(1+w)/c,0,0,u*(1-w)/c],[z,0,0,z]>) where u:=Sqrt(z);
     end if;
@@ -2128,13 +2126,6 @@ end intrinsic;
 intrinsic GL2SimilarityClassRepMap(N::RngIntElt) -> UserProgram
 { Returns a function to construct an element of GL(2,Z/NZ) representing a given similarity class that is optimized to the shape of N. }
     ZZ := Integers(); M2 := MatrixRing(Integers(),2); I2 := Identity(M2); if N eq 1 then return func<M|I2>; end if;
-    b := Factorization(N); p:=[a[1]:a in b]; b := [a[1]^a[2]:a in b];
-    return func<inv|GL2!CRT([r[2]*I2+p[i]^r[1]*M2![0,1,-r[3],r[4]] where r:=inv[i]:i in [1..#inv]],b)> where GL2 := GL2Ambient(N);
-end intrinsic;
-
-intrinsic GL2SimilarityClassRepMap2(N::RngIntElt) -> UserProgram
-{ Returns a function to construct an element of GL(2,Z/NZ) representing a given similarity class that is optimized to the shape of N. }
-    ZZ := Integers(); M2 := MatrixRing(Integers(),2); I2 := Identity(M2); if N eq 1 then return func<M|Identity(M2)>; end if;
     b := Factorization(N); p:=[a[1]:a in b]; b := [a[1]^a[2]:a in b];
     return func<inv|GL2!CRT([r[2]*I2+p[i]^r[1]*M2![0,1,-r[3],r[4]] where r:=inv[i]:i in [1..#inv]],b)> where GL2 := GL2Ambient(N);
 end intrinsic;
@@ -2626,8 +2617,6 @@ intrinsic GL2SimilarityCount(H::GrpMat,g::GrpMatElt:Algorithm:="default") -> Rng
         catch e
             print "ExactQuotient failed in GL2SimilarityCount",N,sprint(GL2Generators(H)),Algorithm;
             cnt := ExactQuotient(m*#Fix(pi(g)),n) where pi := Algorithm eq "action" select CosetAction(GL2Ambient(N),H) else GL2PermutationRepresentation(H);
-            if Denominator(cnt) ne 1 then print "Retry failed:", sprint(cnt); error e; end if;
-            cnt := Numerator(cnt);
         end try;
     end if;
     return cnt;
@@ -2916,12 +2905,12 @@ end intrinsic;
 intrinsic GL2GassmannSignature(H::GrpMat:old:=false) -> SeqEnum
 { With old:=false (default), the array of primitive similarity class counts GL2PrimitiveSimilarityCounts(H); with old:=true, the sorted list of pairs <r,m> where r is a similarity invariant of GL_2(N) and m > 0 is its multiplicity in H.  Either form uniquely identifies the Gassmann equivalence class of H as a subgroup of GL_2(N). }
     if assigned H`SL then return SL2GassmannSignature(H); end if;
-    return N eq 1 select (old select [Universe([[1]])|] else [Universe([1])|]) else gl2gsig(H:old:=old) where N,H := GL2Level(H);
+    return N eq 1 select (old select [Universe([[1]])|] else [1]) else gl2gsig(H:old:=old) where N,H := GL2Level(H);
 end intrinsic;
 
 intrinsic SL2GassmannSignature(H::GrpMat) -> SeqEnum
 { The array of primitive similarity class counts SL2PrimitiveSimilarityCounts(H); this uniquely identifies the Gassmann equivalence class of H as a subgroup of SL_2(N). }
-    return N eq 1 select [Universe([1])|] else sl2gsig(H) where N,H := SL2Level(H);
+    return N eq 1 select [1] else sl2gsig(H) where N,H := SL2Level(H);
 end intrinsic;
 
 intrinsic GL2GassmannHash(H::GrpMat:old:=false) -> RngIntElt

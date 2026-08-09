@@ -12,7 +12,7 @@ freeze;
 
     Please be sure to cite this paper if you use this software in your research.
 
-    Copyright (c) Andrew V. Sutherland, 2019-2025.  See License file for details on copying and usage.
+    Copyright (c) Andrew V. Sutherland, 2019-2026.  See License file for details on copying and usage.
 */
 
 import "gl2base.m": gl2N1;

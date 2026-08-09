@@ -2,13 +2,32 @@ AttachSpec("magma.spec");
 SetSeed(1);
 print "test_genus1.m";
 
+// caught runtime errors store the pretty-printed message, hard-wrapped at 80 columns with the
+// wrap position depending on the intrinsic name, so match error text ignoring all whitespace
+errhas := func<e,s|Position(&cat Split(&cat Split(e`Object,"\n")," "),&cat Split(s," ")) gt 0>;
+
 print "  ModularPolynomial";
 R2 := PolynomialRing(Integers(),2);
 assert R2!ModularPolynomial(2) eq R2!ClassicalModularPolynomial(2);
 assert R2!ModularPolynomial(13) eq R2!ClassicalModularPolynomial(13);
-// FLAGGED (audit 2026-08-06): havemodpoly gate (n le 60) passes for 29 composite n <= 60 that
-// ClassicalModularPolynomial does not know (e.g. 20), so IsogenyOrbits(E,20) fails with a raw
-// file-not-found error from the phi_j_N.txt fallback instead of the require message.
+// REGRESSION (audit 2026-08-06 item 9 fix): the havemodpoly gate (n le 60) passes for composite
+// n <= 60 that ClassicalModularPolynomial does not know (e.g. 20), and the phi_j_N.txt fallback
+// used to fail with a raw Read error (Cannot open file "phi_j_20.txt").  Now ModularPolynomial
+// checks file existence first and raises a clean error in the havemodpoly style, naming the
+// expected file and the download page.
+ok := false;
+try _ := ModularPolynomial(20); catch e ok := true;
+    assert errhas(e,"modular polynomial not available for N = 20"); // clean message, not a Read error
+    assert errhas(e,"phi_j_20.txt");                                // names the expected file
+    assert errhas(e,"ClassicalModPolys.html");                      // references the download page
+end try; assert ok;
+ok := false; // and the same clean error surfaces through IsogenyOrbits
+try _ := IsogenyOrbits(EllipticCurve([Rationals()|1,1]),20); catch e ok := true;
+    assert errhas(e,"modular polynomial not available");
+end try; assert ok;
+// n that ClassicalModularPolynomial genuinely knows still work (composite and prime)
+assert IsogenyOrbits(EllipticCurve([Rationals()|1,1]),6) eq {* 12 *};
+assert IsogenyOrbits(EllipticCurve([Rationals()|1,1]),49) eq {* 56 *};
 
 print "  LMFDBLabel";
 // Ground truth from LMFDB ec_curvedata: SELECT lmfdb_label,"Clabel" FROM ec_curvedata WHERE conductor IN (11,37,121,990,5077)
@@ -116,6 +135,19 @@ assert TorsionDegree(EF,4) eq 6;
 EF7 := EllipticCurve([GF(7)|2,3]);
 assert TorsionOrbits(EF7,5) eq {* 2^^2, 4^^5 *};
 assert TorsionOrbits(EF7,6) eq {* 1^^2, 2^^2, 3^^2, 6^^2 *};
+// REGRESSION (audit 2026-08-06 item 13 fix): TorsionOrbits/TorsionDegree/PrimitiveTorsionPolynomial
+// call WeierstrassModel, which crashed with a raw 'Runtime error in WeierstrassModel' over base
+// fields of characteristic 2 or 3 (e.g. GF(9), GF(4)); now a require rejects such base rings.
+E9 := EllipticCurve([GF(9)|1,1]);
+E4 := EllipticCurve([GF(4)!1,GF(4)!1,0,0,GF(4)!1]);
+for T in [<E9,"GF(9)">,<E4,"GF(4)">] do
+    ok := false; try _ := TorsionOrbits(T[1],5); catch e ok := true; assert errhas(e,"characteristic of the base ring of E must not be 2 or 3"); end try; assert ok;
+    ok := false; try _ := TorsionDegree(T[1],5); catch e ok := true; assert errhas(e,"characteristic of the base ring of E must not be 2 or 3"); end try; assert ok;
+    ok := false; try _ := PrimitiveTorsionPolynomial(T[1],5); catch e ok := true; assert errhas(e,"characteristic of the base ring of E must not be 2 or 3"); end try; assert ok;
+end for;
+// intrinsics that do not use WeierstrassModel still work in characteristic 3 (no require added there)
+assert KummerOrbits(E9,5) eq {* 2^^6 *};
+assert TorsionOrbits(E9,1) eq {* 1 *}; // n=1 early return precedes the characteristic require
 // number-field base still works
 K5 := QuadraticField(5); EK5 := EllipticCurve([K5|1,1]);
 assert TorsionOrbits(EK5,5) eq {* 24 *};

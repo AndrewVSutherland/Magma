@@ -2,7 +2,7 @@
 /*
     General purpose utilities (often things I wished Magma supported directly) and aliases/wrappers for Magma functions to make them easier for me to use and/or remember.
 
-    Copyright (c) Andrew V. Sutherland, 2019-2024.  See License file for details on copying and usage.
+    Copyright (c) Andrew V. Sutherland, 2019-2026.  See License file for details on copying and usage.
 */
 
 declare verbose ParallelJobs, 1;
@@ -97,7 +97,7 @@ intrinsic PySplit(s::MonStgElt, sep::MonStgElt : limit:=-1) -> SeqEnum[MonStgElt
 end intrinsic;
 
 intrinsic split(s::MonStgElt,d::MonStgElt) -> SeqEnum[MonStgElt]
-{ Splits the string s using the delimiter d, including empty and trailing elements (equivalent to python r.split(d) in python). }
+{ Splits the string s using the delimiter d, including empty and trailing elements (equivalent to r.split(d) in python). }
     return #s eq 0 select [""] else Split(s,d:IncludeEmpty); // Split with IncludeEmpty includes empty strings at the end (as of Magma 2.29)
 end intrinsic;
 
@@ -541,19 +541,6 @@ intrinsic KroneckerClassNumber(D::RngIntElt) -> RngIntElt
     return &+[ClassNumber(d^2*D0): d in Divisors(f)];
 end intrinsic;
 
-intrinsic split(f::RngUPolElt, p::RngIntElt) -> SetMulti
-{ The multiset of pairs <d,e> where d is the residue field degree and e is the ramification index of the primes above p in the number field defined by the monic irreducible polynomial f. }
-    require IsMonic(f) and IsIrreducible(f): "The polynomial f must be monic and irreducible.";
-    require IsPrime(p): "p must be a rational prime.";
-    s := Pipe(Sprintf("sage -c \"load('/home/drew/Dropbox/magma/split.py'); print(split(%o,%o))\"",Coefficients(f),p),"");
-    try
-        s := eval(s);
-        return {* <a[1],a[2]>: a in s *};
-    catch e
-        error "Call to Sage failed with return value: " cat s;
-    end try;
-end intrinsic;
-
 function plog(p,e,a,b) // returns nonnegative integer x such that a^x = b or -1, assuming a has order p^e
     if e eq 0 then return a eq 1 and b eq 1 select 0 else -1; end if;
     if p^e le 256 then return Index([a^n:n in [0..p^e-1]],b)-1; end if;
@@ -757,7 +744,7 @@ intrinsic facpat(f::RngUPolElt:SquareFree:=false) -> SetMulti[RngIntElt]
 { Returns the factorization pattern of the univariate polynomial f(x). }
     if IsFinite(BaseRing(f)) then
         return Degree(f) le 0 select {**} else (SquareFree select {* a[1]^^(Degree(a[2]) div a[1]) : a in DistinctDegreeFactorization(f) *}
-                                          else &join[{* a[1]^^(Degree(a[2]) div a[1]) : a in DistinctDegreeFactorization(b[1]) *}: b in SquarefreeFactorization(f)]);
+                                          else &join[{* a[1]^^(b[2]*(Degree(a[2]) div a[1])) : a in DistinctDegreeFactorization(b[1]) *}: b in SquarefreeFactorization(f)]);
     else
         return Degree(f) le 0 select {**} else {* Degree(a[1])^^a[2] : a in Factorization(f) *};
     end if;
@@ -905,19 +892,8 @@ intrinsic NormalizedIgusaInvariants (C::CrvHyp : Easy:=false) -> SeqEnum
             c *:= z; inv2 := [0,0,r,c^4*inv[4],c^5*inv[5]];
             c *:= z; inv3 := [0,0,r,c^4*inv[4],c^5*inv[5]];
             return a where a:=Min([inv1,inv2,inv3]);
-        elif inv[4] ne 0 then
-            r := PowerClassRepresentative(inv[4],4); c := Roots(t^4-r/inv[4])[1][1];
-            inv1 := [0,0,0,r,c^5*inv[5]];
-            c := -c; inv2 := [0,0,0,r,c^5*inv[5]];
-            if p mod 4 ne 1 then
-                return i where i:=Min([inv1,inv2]);
-            else
-                z := (R!PrimitiveRoot(p))^((p-1) div 4);
-                c *:= z; inv3 := [0,0,0,r,c^5*inv[5]];
-                c := -c; inv4 := [0,0,0,r,c^5*inv[5]];
-                return i where i:=Min([inv1,inv2,inv3,inv4]);
-            end if;
         else
+            // the Igusa relation 4*J8 = J2*J6 - J4^2 forces inv[4] = 0 here (p is odd since p=2 returned above)
             return [0,0,0,0,PowerClassRepresentative(inv[5],5)];
         end if;
     end if;
@@ -1236,7 +1212,7 @@ intrinsic SmoothNumbers (P::SeqEnum[RngIntElt], B::RngIntElt: B0:=1) -> SeqEnum[
     return L;
 end intrinsic;
 
-intrinsic PowerClassRepresentative (a::RngIntElt, p::RngIntElt, n::RngIntElt:Root:=false) -> RngIntElt
+intrinsic PowerClassRepresentative (a::RngIntElt, p::RngIntElt, n::RngIntElt) -> RngIntElt
 { Returns the least nonnegative integer b for which a*c^n = b for some nonzero c in Fp (intended for small n, this will be very slow if gcd(n,p-1) is large). }
     require IsProbablePrime(p): "p must be prime";
     require n gt 0: "n must be positive";

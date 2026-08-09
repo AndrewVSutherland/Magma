@@ -63,11 +63,10 @@ A test file `tests/test_<name>.m` must:
 
 Known limitations (flagged, not fixed — see the audit reports):
 - `tracehash.m`: `SlowTraceHash(CrvHyp)` and `TraceHash(CrvPln)` call a
-  `TracesOfFrobenius` signature that exists nowhere; the genus 2 fast path
-  needs an external `hashcurves` binary.
-- `utils.m`: `split(RngUPolElt,RngIntElt)` shells out to a hardcoded personal
-  Sage path.
-- `polredabs.m`: gp errors are silently swallowed (empty/zero returns).
+  `TracesOfFrobenius` signature that exists nowhere (the maintainer will
+  address this upstream); the genus 2 fast path still needs an external
+  `hashcurves` binary, but as of 2026-08-09 a missing binary raises a clean
+  error instead of failing obscurely.
 
 (The originally-flagged `GL2MinimalConjugate` non-minimality was fixed on
 2026-08-09 after label-impact analysis — see

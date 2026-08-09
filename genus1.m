@@ -3,13 +3,18 @@ freeze;
     Dependencies: utils.m
     Various utility functions for working with genus 1 curves, including elliptic curves, mostly over Q and over finite fields.
 
-    Copyright (c) Andrew V. Sutherland, 2019-2025.  See License file for details on copying and usage.
+    Copyright (c) Andrew V. Sutherland, 2019-2026.  See License file for details on copying and usage.
 */
 
 minimal := func<a,b|&and[Valuation(b,r[1]) lt 6:r in F|r[2] ge 4] where F:=Factorization(GCD(a,b))>;
 havemodpoly := func<n|n le 60>;
 
 declare attributes RngInt: ModularPolynomialCache;
+
+function classicalmodpoly(N) // wraps the try/catch so a caught error does not taint the caller's error reporting
+    try return true, ClassicalModularPolynomial(N); catch e; end try;
+    return false, _;
+end function;
 
 function loadmodpoly(filename)
     R<X,Y> := PolynomialRing(Integers(),2);
@@ -20,12 +25,14 @@ function loadmodpoly(filename)
 end function;
 
 intrinsic ModularPolynomial(N::RngIntElt:filename:=Sprintf("phi_j_%o.txt",N)) -> RngMPol
-{ The modular polynomial Phi_N (this function will dynamically load and cache polynomials that ClassicalModularPolynomial does not know if they are available in phi_j_N.txt, which you can download from https://math.mit.edu/~drew/ClassicalModPolys.html for N <= 400 and prime N < 1000. }
+{ The modular polynomial Phi_N (this function will dynamically load and cache polynomials that ClassicalModularPolynomial does not know if they are available in phi_j_N.txt, which you can download from https://math.mit.edu/~drew/ClassicalModPolys.html for N <= 400 and prime N < 1000). }
     R<X,Y> := PolynomialRing(Integers(),2);
-    try return ClassicalModularPolynomial(N); catch e; end try;
+    b, phi := classicalmodpoly(N);
+    if b then return phi; end if;
     ZZ := Integers();
     if not assigned ZZ`ModularPolynomialCache then ZZ`ModularPolynomialCache:= []; end if;
     if IsDefined(ZZ`ModularPolynomialCache,N) then return ZZ`ModularPolynomialCache[N]; end if;
+    require OpenTest(filename,"r"): Sprintf("modular polynomial not available for N = %o (expected file %o, which can be downloaded from https://math.mit.edu/~drew/ClassicalModPolys.html)", N, filename);
     ZZ`ModularPolynomialCache[N] := loadmodpoly(filename);
     return ZZ`ModularPolynomialCache[N];
 end intrinsic;
@@ -180,6 +187,7 @@ intrinsic TorsionOrbits (E::CrvEll, n::RngIntElt:slow:=false) -> SetMulti
 { The multiset of sizes of Galois orbits of E[n] for an elliptic curve E. }
     require n gt 0: "n must be positive.";
     if n eq 1 then return {* 1 *}; end if;
+    require Characteristic(BaseRing(E)) notin {2,3}: "The characteristic of the base ring of E must not be 2 or 3.";
     E := WeierstrassModel(E);  f := HyperellipticPolynomials(E);
     psi := PrimitiveDivisionPolynomial(E,n);
     A := Factorization(psi);
@@ -194,6 +202,7 @@ intrinsic TorsionDegree (E::CrvEll, n::RngIntElt:slow:=false) -> RngIntElt
 { The minimal degree of an extension over which E has a rational point of order n. }
     require n gt 0: "n must be positive.";
     if n eq 1 then return 1; end if;
+    require Characteristic(BaseRing(E)) notin {2,3}: "The characteristic of the base ring of E must not be 2 or 3.";
     E := WeierstrassModel(E);  f := HyperellipticPolynomials(E);
     A := Factorization(PrimitiveDivisionPolynomial(E,n));
     // if n is odd and the primitive n-division polynomial is irreducible, so is primitive torsion polynomial
@@ -206,6 +215,7 @@ end intrinsic;
 intrinsic PrimitiveTorsionPolynomial (E::CrvEll, n::RngIntElt) -> RngUPolElt
 { Polynomial whose splitting field is the n-torsion field of E. }
     require n gt 0: "n must be positive.";
+    require Characteristic(BaseRing(E)) notin {2,3}: "The characteristic of the base ring of E must not be 2 or 3.";
     E := WeierstrassModel(E);  f := HyperellipticPolynomials(E);
     if n eq 1 then return Parent(f).1; end if;
     if n eq 2 then return f; end if;

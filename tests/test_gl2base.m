@@ -1192,10 +1192,10 @@ BH := sub<G7|[h^c7 : h in Generators(GL2Borel(7))]>;
 SH := GL2Standardize(BH);
 assert &and[g[2][1] eq 0 : g in Generators(SH)];  // Borel conjugate standardizes to upper triangular
 
-print "  GL2SimilarityClassRepMap/RepMap2/SL2SimilarityClassRepMap";
+print "  GL2SimilarityClassRepMap/SL2SimilarityClassRepMap";
 for N in [8,12] do
-    r1 := GL2SimilarityClassRepMap(N); r2 := GL2SimilarityClassRepMap2(N);
-    assert &and[r1(s) eq r2(s) : s in GL2SimilaritySet(N)];
+    r1 := GL2SimilarityClassRepMap(N);
+    assert &and[GL2SimilarityInvariant(r1(s)) eq s : s in GL2SimilaritySet(N)];
     rs := SL2SimilarityClassRepMap(N);
     assert &and[Determinant(m) eq 1 and GL2SimilarityInvariant(m) eq s where m := rs(s) : s in SL2SimilaritySet(N)];
 end for;
@@ -1223,10 +1223,9 @@ for N in [2..12] cat [16] do
         assert c[2] eq GL2ConjugacyClassSize(c[3]);
     end for;
     assert T eq cnts;  // similarity invariant <-> conjugacy class bijection with correct sizes
-    rep := GL2SimilarityClassRepMap(N); rep2 := GL2SimilarityClassRepMap2(N);
+    rep := GL2SimilarityClassRepMap(N);
     for i:=1 to #S do
         assert GL2SimilarityInvariant(rep(S[i])) eq S[i]; // round trip
-        assert rep2(S[i]) eq rep(S[i]);
     end for;
     f := GL2SimilarityClassMap(N); idx := GL2SimilarityClassIndexMap(N);
     szmap := GL2SimilarityClassSizeMap(N);
@@ -2034,19 +2033,50 @@ end for;
 // pinned key values (must never change: gl2tab tables are keyed on these)
 assert GL2SubgroupKey(GL2Ambient(1)) eq djb2("[]")*djb2("[1]");
 
-// FLAGGED (audit 2026-08-06): GL2GassmannSignature/SL2GassmannSignature return [] at level 1 while
-// GL2SimilarityCounts(level 1) = [1] and GL2SubgroupKey hardcodes djb2("[1]"); the two GL2SubgroupKey
-// overloads therefore disagree exactly at level 1.  Left unfixed (changing either side could break
-// historically computed table keys).
-// FLAGGED (audit 2026-08-06): GL2Borel/SL2Borel/GL2Borel1/GL2Borel12/GL2BorelK1/GL2BorelK12 accept any
-// ring R via their R::Rng signatures but set Order/Index/Level attributes using Z/N-only formulas;
-// e.g. GL2Borel(GF(4)) gets Order := 16 though the group has 36 elements (corrupted group object).
-// FLAGGED (audit 2026-08-06): GL2MaximalS4 line ~2001: the branch 'elif p mod 8 eq 1' is unreachable
-// (a = 1 whenever p = 1 mod 8) and the variable t is unused; outputs verified correct for all residues.
-// FLAGGED (audit 2026-08-06): GL2SimilarityCount catch block: ExactQuotient never returns a rational,
-// so the Denominator/Numerator retry diagnostic is dead code.
-// FLAGGED (audit 2026-08-06): GL2SimilarityClassRepMap2 is an exact functional duplicate of
-// GL2SimilarityClassRepMap with no callers.
+// FIXED (audit item 6, 2026-08-09): GL2GassmannSignature/SL2GassmannSignature now return [1] at
+// level 1 (GL2SubgroupKey convention, matching GL2SimilarityCounts at level 1 and the hardcoded
+// key djb2("[]")*djb2("[1]")), so the two GL2/SL2SubgroupKey overloads now agree at level 1.
+// The old:=true form still returns [] at level 1 (pinned in LevelOneEdges above); key values for
+// levels > 1 are unchanged (pinned in the GassmannSignatures and GL2SubgroupKey sections above).
+assert GL2GassmannSignature(GL2Ambient(1)) eq [1];
+assert SL2GassmannSignature(SL2Ambient(1)) eq [1];
+assert GL2SubgroupKey(GL2Ambient(1)) eq GL2SubgroupKey(GL2OrbitSignature(GL2Ambient(1)),GL2GassmannSignature(GL2Ambient(1)));
+assert SL2SubgroupKey(SL2Ambient(1)) eq GL2SubgroupKey(SL2OrbitSignature(SL2Ambient(1)),SL2GassmannSignature(SL2Ambient(1)));
+
+// FIXED (audit item 7, 2026-08-09): Borel constructors narrowed from R::Rng to R::RngIntRes (their
+// Order/Index/Level attributes use Z/N-only formulas; GL2Borel(GF(4)) used to return a corrupted
+// group claiming order 16 when the true order is 36).  GF(4) must now fail signature matching.
+ok := false; try _ := GL2Borel(GF(4)); catch e ok := true; end try; assert ok;
+ok := false; try _ := SL2Borel(GF(4)); catch e ok := true; end try; assert ok;
+ok := false; try _ := GL2Borel1(GF(4)); catch e ok := true; end try; assert ok;
+ok := false; try _ := GL2Borel12(GF(4)); catch e ok := true; end try; assert ok;
+ok := false; try _ := GL2BorelK1(GF(4)); catch e ok := true; end try; assert ok;
+ok := false; try _ := GL2BorelK12(GF(4)); catch e ok := true; end try; assert ok;
+ok := false; try _ := GL2BorelPC(GF(4)); catch e ok := true; end try; assert ok;
+ok := false; try _ := GL2Borel1PC(GF(4)); catch e ok := true; end try; assert ok;
+ok := false; try _ := SL2BorelPC(GF(4)); catch e ok := true; end try; assert ok;
+B := GL2Borel(Integers(4)); assert B`Order eq GL2BorelSize(4) and B eq GL2Borel(4); // RngIntRes path unchanged
+
+// AUDIT dead code removed (2026-08-09): GL2MaximalS4 unreachable 'elif p mod 8 eq 1' branch
+// (a = 1 whenever p mod 8 in [1,7]) and unused variable t; outputs verified bit-identical
+// before/after at a fixed seed.  Pin order and conjugacy class of the result (the exact
+// representative returned depends on the RNG state via ConjugateToRationalSubgroup).
+for t in [* <5,[[1,4,1,1],[2,0,0,2],[3,3,4,1]]>, <7,[[2,1,1,1],[3,0,0,3],[4,1,0,2]]>,
+           <13,[[2,0,0,2],[3,0,12,9],[5,3,3,10]]>, <17,[[3,0,0,3],[4,9,3,7],[9,7,4,7]]> *] do
+    p := t[1]; H := GL2MaximalS4(p);
+    assert GL2Order(H) eq 24*(p-1);
+    assert IsConjugate(GL(2,Integers(p)),H,sub<GL(2,Integers(p))|t[2]>);
+end for;
+
+// AUDIT dead code removed (2026-08-09): the GL2SimilarityCount catch block's Denominator/Numerator
+// lines (ExactQuotient returns an integer or raises; the ExactQuotient retry itself is kept).
+g8 := GL2Ambient(8)![1,1,0,1];
+assert GL2SimilarityCount(GL2Borel(8),g8) eq #[h : h in GL2Borel(8) | GL2SimilarityInvariant(h) eq GL2SimilarityInvariant(g8)];
+
+// AUDIT dead code removed (2026-08-09): the intrinsic GL2SimilarityClassRepMap2 (an exact
+// functional duplicate of GL2SimilarityClassRepMap with zero callers) was removed entirely;
+// GL2SimilarityClassRepMap round trips are pinned in the similarity sections above.
+
 // FLAGGED (audit 2026-08-06): SL2PrimitiveSimilarityIndexes(1) returns the SeqEnum [1] where the GL2
 // version returns the SetIndx {@ 1 @} (declared return type SetIndx).
 
