@@ -120,9 +120,18 @@ assert TorsionOrbits(EF7,6) eq {* 1^^2, 2^^2, 3^^2, 6^^2 *};
 K5 := QuadraticField(5); EK5 := EllipticCurve([K5|1,1]);
 assert TorsionOrbits(EK5,5) eq {* 24 *};
 assert TorsionDegree(EK5,4) eq 12;
-// FLAGGED (audit 2026-08-06): n=1 edge cases: IsogenyOrbits/KummerOrbits/TorsionOrbits return the
-// integer 1 (not {* 1 *}), and TorsionGaloisGroup(E,1)/FullTorsionDegree(E,1) crash because
-// PrimitiveTorsionPolynomial(E,1) returns the integer 1 (GaloisGroup of an integer).
+// n=1 edge cases (resolved per maintainer review of PR #1, 2026-08-09): orbit intrinsics return
+// {* 1 *}, PrimitiveTorsionPolynomial returns x, and the downstream Galois/degree intrinsics
+// (which previously crashed on the integer 1) now work at n=1
+print "  n=1 edge cases";
+assert IsogenyOrbits(E11,1) eq {* 1 *};
+assert KummerOrbits(E11,1) eq {* 1 *};
+assert TorsionOrbits(E11,1) eq {* 1 *};
+f1 := PrimitiveTorsionPolynomial(E11,1); assert f1 eq Parent(f1).1;
+assert #TorsionGaloisGroup(E11,1) eq 1;
+assert FullTorsionDegree(E11,1) eq 1;
+assert IsogenyDegree(E11,1) eq 1 and TorsionDegree(E11,1) eq 1;
+assert TorsionOrbits(EF,1) eq {* 1 *};   // finite-field base ring
 
 print "  PrimitiveTorsionPolynomial/TorsionGaloisGroup/FullTorsionDegree/TorsionField";
 assert #TorsionGaloisGroup(E37,2) eq 6;

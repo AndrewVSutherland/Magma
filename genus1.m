@@ -103,8 +103,8 @@ intrinsic PrimitiveDivisionPolynomial3 (E::CrvEll, n::RngIntElt) -> RngUPolElt
 end intrinsic;
 
 intrinsic IsogenyOrbits (E::CrvEll, n::RngIntElt) -> SetMulti
-{ The multiset of sizes of Galois orbits of cyclic isogenies of degree n (returns the integer 1 when n=1). }
-    if n eq 1 then return 1; end if;
+{ The multiset of sizes of Galois orbits of cyclic isogenies of degree n. }
+    if n eq 1 then return {* 1 *}; end if;
     require havemodpoly(n): Sprintf("modular polynomial not available for n = %o", n);
     R<x> := PolynomialRing(BaseRing(E));
     return {* Degree(a[1])^^a[2] :a in Factorization(Evaluate(ModularPolynomial(n),[jInvariant(E),x])) *};
@@ -128,9 +128,9 @@ intrinsic IsogenyGaloisGroup (E::CrvEll, n::RngIntElt) -> GrpPerm
 end intrinsic;
 
 intrinsic KummerOrbits (E::CrvEll, n::RngIntElt) -> SetMulti
-{ The multiset of sizes of Galois orbits of x-coordinates of points of order n on an elliptic curve E (returns the integer 1 when n=1). }
+{ The multiset of sizes of Galois orbits of E[n] for an elliptic curve E. }
     require n gt 0: "n must be positive.";
-    if n eq 1 then return 1; end if;
+    if n eq 1 then return {* 1 *}; end if;
     A := Factorization(PrimitiveDivisionPolynomial(E,n));
     return {* Degree(a[1])^^a[2] : a in A *};
 end intrinsic;
@@ -177,9 +177,9 @@ function fsqmod(f,g,n)
 end function;
 
 intrinsic TorsionOrbits (E::CrvEll, n::RngIntElt:slow:=false) -> SetMulti
-{ The multiset of sizes of Galois orbits of points of order n on an elliptic curve E (returns the integer 1 when n=1). }
+{ The multiset of sizes of Galois orbits of E[n] for an elliptic curve E. }
     require n gt 0: "n must be positive.";
-    if n eq 1 then return 1; end if;
+    if n eq 1 then return {* 1 *}; end if;
     E := WeierstrassModel(E);  f := HyperellipticPolynomials(E);
     psi := PrimitiveDivisionPolynomial(E,n);
     A := Factorization(psi);
@@ -204,10 +204,10 @@ intrinsic TorsionDegree (E::CrvEll, n::RngIntElt:slow:=false) -> RngIntElt
 end intrinsic;
 
 intrinsic PrimitiveTorsionPolynomial (E::CrvEll, n::RngIntElt) -> RngUPolElt
-{ Polynomial whose splitting field is the n-torsion field of E (returns the integer 1 when n=1). }
+{ Polynomial whose splitting field is the n-torsion field of E. }
     require n gt 0: "n must be positive.";
-    if n eq 1 then return 1; end if;
     E := WeierstrassModel(E);  f := HyperellipticPolynomials(E);
+    if n eq 1 then return Parent(f).1; end if;
     if n eq 2 then return f; end if;
     R<X,Y> := PolynomialRing(BaseRing(f),2);
     g := PrimitiveDivisionPolynomial(E,n);               // roots of g are all x-coords of points of order n
