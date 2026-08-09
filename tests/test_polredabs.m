@@ -68,6 +68,9 @@ assert IsPrime(p) and IsPrime(q);
 assert not IsPolredabsCandidate(t^2-p*q);
 // large prime discriminant is fine (IsProbablePrime branch)
 assert IsPolredabsCandidate(t^2-NextPrime(10^100));
+// Magma V2.29-9 changed TrialDivision's second return value from []/[c] to a bare integer
+// cofactor; regression for the version guard (smooth >10^80 discriminant, fully-factored branch)
+assert IsPolredabsCandidate(t^2-3^170*5^120*7);
 
 print "  polredbestify";
 h, b := polredbestify(x^2-2*x+8);

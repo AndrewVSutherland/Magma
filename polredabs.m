@@ -65,6 +65,8 @@ intrinsic IsPolredabsCandidate (f::RngUPolElt) -> BoolElt
     n := PerfectPowerBase(Integers()!AbsoluteValue(Discriminant(f)));
     if n le 10^80 then return true; end if;
     _,s := TrialDivision(n,10^6);
+    // in Magma V2.29-9 the second return value of TrialDivision became a bare integer cofactor (1 when none); earlier versions returned [] or [c]
+    if Type(s) eq RngIntElt then s := s eq 1 select [Integers()|] else [s]; end if;
     if #s eq 0 then return true; end if;
     n := PerfectPowerBase(Max(s));
     _,s := PollardRho(n);
