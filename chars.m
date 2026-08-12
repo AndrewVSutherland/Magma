@@ -3,7 +3,7 @@ freeze;
     Dependencies: utils.m
     Various functions useful for working with Dirichlet characters, their Galois orbits, and Conrey labels
 
-    Copyright (c) Andrew V. Sutherland, 2019-2025.  See License file for details on copying and usage.
+    Copyright (c) Andrew V. Sutherland, 2019-2026.  See License file for details on copying and usage.
 */
 
 import "utils.m": plog;
@@ -1044,7 +1044,6 @@ end intrinsic;
 // Given an nth-root of unity z in a number field K return angles of conjugates (in standard order of embeddings of K)
 function EmbeddedConjugateAngles(z,n)
     C := Conjugates(z);
-    CC := Parent(z[1]);
     pi := Pi(RealField());
     return [ NormalizedAngle(Round(n*Argument(c)/(2*pi))/n) : c in C];
 end function;
@@ -1064,10 +1063,9 @@ intrinsic TranslatedCharacterAngles (N::RngIntElt, u::SeqEnum[RngIntElt], v::Seq
 { Given arbitrary generators u for (Z/NZ)* and a corresponding list of angles v defining a character of modulus N, compute a list of angles giving values of the character on the integers in U.  Does not verify the validity of v! }
     require N ge 1: "Modulus N must be a positive integer";
     require #u eq #v: "You must specify an angle for each generator";
-    require #u gt 0 and &and[(n mod N) ne 1 and GCD(N,n) eq 1:n in u]: "Generators must be coprime to N and not 1 modulo N.";
+    require #u gt 0 and &and[(n mod N) ne (1 mod N) and GCD(N,n) eq 1:n in u]: "Generators must be coprime to N and not 1 modulo N.";
     v := [NormalizedAngle(x):x in v];
     if U eq u then return v; end if;  // Don't waste time on the (easy) expected case
-    if N le 2 then return [Rationals()|1:n in U]; end if;
     evec := UnitGeneratorsLogMap(N,u);
     V := [NormalizedAngle(&+[e[i]*v[i]:i in [1..#u]]) where e:=evec(x): x in U];
     return V;

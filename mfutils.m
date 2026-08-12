@@ -5,7 +5,7 @@ freeze;
 
     This module implements some handy intrinsics for working with LMFDB modular forms (mostly label manipulation)
     
-    Copyright (c) Andrew V. Sutherland, 2017-2019.  See License file for details on copying and usage.
+    Copyright (c) Andrew V. Sutherland, 2017-2026.  See License file for details on copying and usage.
 */
 
 intrinsic AnalyticConductor(N::RngIntElt,k::RngIntElt) -> FldReElt

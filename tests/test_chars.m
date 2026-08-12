@@ -580,8 +580,13 @@ for N in [3..20] do
         end if;
     end for;
 end for;
-// FLAGGED (audit 2026-08-06): the "if N le 2" early return in TranslatedCharacterAngles is
-// unreachable (the require on generators fires first for N <= 2); dead code, no behavioral impact.
+// Regression (audit 2026-08-06 disposition): the "if N le 2" early return was removed as dead code;
+// the generator require now rejects every N <= 2 call (including N=1, where every integer is 1 mod 1).
+ok := false; try _ := TranslatedCharacterAngles(2,[3],[Rationals()|0],[1]); catch e ok := true; assert "Generators must be coprime" in e`Object and "not 1 modulo N" in e`Object; end try; assert ok;
+ok := false; try _ := TranslatedCharacterAngles(1,[2],[Rationals()|0],[1]); catch e ok := true; assert "Generators must be coprime" in e`Object and "not 1 modulo N" in e`Object; end try; assert ok;
+ok := false; try _ := TranslatedCharacterAngles(1,[2],[Rationals()|0],[2]); catch e ok := true; assert "Generators must be coprime" in e`Object and "not 1 modulo N" in e`Object; end try; assert ok;
+// N >= 3 behavior unchanged: pin a concrete translation
+assert TranslatedCharacterAngles(13,[6],ConreyCharacterAngles(13,2,[6]),UnitGenerators(13)) eq ConreyCharacterAngles(13,2,UnitGenerators(13));
 
 print "  DirichletCharacterFromAngles";
 for N in [3..24] do

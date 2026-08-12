@@ -1,11 +1,18 @@
 freeze;
+/*
+    Dependencies: genus2euler.m
+    Trace hashes of curves, modular forms, and other L-function sources, as defined in Sec 4.3 of https://doi.org/10.1112/S146115701600019X.
+
+    Copyright (c) Andrew V. Sutherland, 2019-2026.  See License file for details on copying and usage.
+*/
 
 // depends on genus2euler.m to handle primes of almost good reduction for genus 2 curves efficiently
 // uses EulerFactor for primes in [2^12,2^13] of bad reduction for the Jacobian, which may be slow
 // For genus 2 curves it would be faster to use Pari/GP's lfungenus, but this requires Pari/GP 2.18
 // NB: the genus 2 fast paths of TraceHash/TwistHash(C::CrvHyp) require the external "hashcurves" binary
-// (smalljac) in the PATH, and SlowTraceHash/TraceHash(C::CrvPln) require a TracesOfFrobenius intrinsic
-// for CrvHyp/CrvPln (with a B0 parameter) that is not part of this package or of stock Magma
+// (smalljac) in the PATH (a clean error is raised if it cannot be found), and SlowTraceHash/TraceHash(C::CrvPln)
+// require a TracesOfFrobenius intrinsic for CrvHyp/CrvPln (with a B0 parameter) that is not part of this
+// package or of stock Magma
 
 c:=[326490430436040986,559705121321738418,1027143540648291608,1614463795034667624,455689193399227776,
     812966537786397194,2073755909783565705,1309198521558998535,486216762465058766,1847926951704044964,
@@ -158,9 +165,14 @@ sprint := func<X|strip(Sprintf("%o",X))>;
 
 euler := func<C,p|Genus(C) eq 2 and Conductor(C,p) eq 0 select Genus2AlmostGoodEulerFactor(C,p) else EulerFactor(C,p)>;
 
+// System returns the shell's exit status times 256, so this is 0 exactly when hashcurves is on the PATH
+hashcurves_available := func<|System("which hashcurves > /dev/null 2>&1") eq 0>;
+hashcurves_errmsg := "The hashcurves binary (smalljac) must be on the PATH to compute trace hashes of genus 2 curves.";
+
 intrinsic TraceHash(C::CrvHyp[FldRat]) -> RngIntElt
 { Given a hyperelliptic curve C/Q computes the hash sum_(2^12<p<2^13) a_p(C)*c_p mod 2^61-1 defined in Sec 4.3 of https://doi.org/10.1112/S146115701600019X. }
     if Genus(C) ne 2 then return SlowTraceHash(C); end if;
+    require hashcurves_available(): hashcurves_errmsg;
     R<x> := PolynomialRing(Rationals());
     a := [StringToInteger(s): s in Split(strip(Pipe("hashcurves " cat sprint([Eltseq(f),Eltseq(h)] where f,h:=HyperellipticPolynomials(C)),"")),",")];
     return #a eq 1 select a[1] else Integers()!(F!a[1]+&+[F!-Coefficient(euler(C,p),1)*c[#PrimesUpTo(p)-564] where p:=a[i]:i in [2..#a]]) where F := GF(2^61-1);
@@ -169,6 +181,7 @@ end intrinsic;
 intrinsic TwistHash(C::CrvHyp[FldRat]) -> RngIntElt
 { Given a hyperelliptic curve C/Q computes the hash sum_(2^12<p<2^13) |a_p(C)|*c_p mod 2^61-1. }
     require Genus(C) eq 2: "Currently supported only for genus 2 curves";
+    require hashcurves_available(): hashcurves_errmsg;
     R<x> := PolynomialRing(Rationals());
     a := [StringToInteger(s): s in Split(strip(Pipe("hashcurves " cat sprint([Eltseq(f),Eltseq(h)] where f,h:=HyperellipticPolynomials(C)) cat " -1","")),",")];
     return #a eq 1 select a[1] else Integers()!(F!a[1]+&+[F!Abs(Coefficient(euler(C,p),1))*c[#PrimesUpTo(p)-564] where p:=a[i]:i in [2..#a]]) where F := GF(2^61-1);

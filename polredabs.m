@@ -1,9 +1,23 @@
 freeze;
+/*
+    Dependencies: none (requires the PARI/GP binary gp on the PATH)
+    Intrinsics that make system calls to PARI/GP (polredabs, polredbest, nfisincl, ...), none of which will work unless you have PARI/GP installed.
 
-// This package implements intrinsics that make system calls to Pari/GP (none of which will work unless you have Pari/GP installed)
+    Copyright (c) Andrew V. Sutherland, 2019-2026.  See License file for details on copying and usage.
+*/
+
+// extract gp error/warning lines (they contain "***") so we can detect errors and report them
+function gp_err_lines(s)
+    return [t : t in Split(s,"\n") | Index(t,"***") ne 0];
+end function;
 
 function get_gp_coeffs(s)
-    return [StringToInteger(x) : x in Split(s[Index(s,"[")+1..Index(s,"]")-1],",")];
+    t := Join([t : t in Split(s,"\n") | Index(t,"***") eq 0],"\n");
+    if Index(t,"[") eq 0 then
+        e := gp_err_lines(s);
+        error Sprintf("gp did not return a result in polredabs/polredbest (gp said: %o)", #e gt 0 select e[#e] else s);
+    end if;
+    return [StringToInteger(x) : x in Split(t[Index(t,"[")+1..Index(t,"]")-1],",")];
 end function;
 
 function get_gp_mat(s)
@@ -15,7 +29,7 @@ end function;
 intrinsic polredabs(f::SeqEnum:DiscFactors:=[]) -> SeqEnum
 { Computes a smallest canonical defining polynomial of the etale algebra Q[x]/(f(x)) using pari. }
     cmd := #DiscFactors eq 0 select Sprintf("{print(Vecrev(Vec(polredabs(Pol(Vecrev(%o))))))}", f) else Sprintf("{print(Vecrev(Vec(polredabs([Pol(Vecrev(%o)),%o]))))}", f,DiscFactors);
-    s := Pipe("gp -q", cmd);
+    s := Pipe("gp -q 2>&1", cmd);
     return get_gp_coeffs(s);
 end intrinsic;
 
@@ -26,6 +40,7 @@ end intrinsic;
 
 intrinsic polredabs(K::FldNum:DiscFactors:=[]) -> FldNum
 { Given a number field returns the same number field defined using a canonical defining polynomial using pari. }
+    require BaseField(K) cmpeq Rationals(): "K must be an absolute number field (with base field Q); apply AbsoluteField to K first.";
     return NumberField(polredabs(DefiningPolynomial(K):DiscFactors:=DiscFactors));
 end intrinsic;
 
@@ -37,7 +52,7 @@ end intrinsic;
 intrinsic polredbest(f::SeqEnum:DiscFactors:=[]) -> SeqEnum
 { Computes a small (non-canonical) defining polynomial of the etale algebra Q[x]/(f(x)) using pari. }
     cmd := #DiscFactors eq 0 select Sprintf("{print(Vecrev(Vec(polredbest(Pol(Vecrev(%o))))))}", f) else Sprintf("{print(Vecrev(Vec(polredbest([Pol(Vecrev(%o)),%o]))))}", f,DiscFactors);
-    s := Pipe("gp -q", cmd);
+    s := Pipe("gp -q 2>&1", cmd);
     return get_gp_coeffs(s);
 end intrinsic;
 
@@ -48,6 +63,7 @@ end intrinsic;
 
 intrinsic polredbest(K::FldNum:DiscFactors:=[]) -> FldNum
 { Given a number field returns the same number field defined using a small (non-canonical) defining polynomial using pari. }
+    require BaseField(K) cmpeq Rationals(): "K must be an absolute number field (with base field Q); apply AbsoluteField to K first.";
     return NumberField(polredbest(DefiningPolynomial(K):DiscFactors:=DiscFactors));
 end intrinsic;
 

@@ -1,9 +1,13 @@
 freeze;
 /*
+    Dependencies: none
+
     This magma package file implements the algorithms described in the paper
 
         Computing Euler factors of genus 2 curves over Q at primes of almost good reduction
         by Celine Maistret and Andrew V. Sutherland
+
+    Copyright (c) Andrew V. Sutherland, 2019-2026.  See License file for details on copying and usage.
 */
 
 lpoly3 := func<f|LPolynomial(EllipticCurve(Evaluate(f,Parent(f).1/c)*c^2)) where c:=LeadingCoefficient(f)>;
