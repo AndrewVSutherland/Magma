@@ -3176,8 +3176,9 @@ intrinsic GL2MinimalConjugate(H::GrpMat) -> SeqEnum[SeqEnum[RngIntElt]]
     S := conjugates(G,H) where conjugates := func<G,H|[Conjugate(H,a):a in GL2RightTransversal(Normalizer(G,H))]>;
     T := [H:H in S|h in H] where h := G![0,1,1,0]; if #T gt 0 then S := T; else T := [H:H in S|h in H] where h := G![0,1,1,1]; if #T gt 0 then S := T; end if; end if;
     if #S eq 1 then return GL2MinimalGenerators(S[1]); end if;
-    A := [Min([k:k in K]):K in S]; a := Min(A);
-    if a eq G![1,0,0,1] then A := [Min([k:k in K|k ne a]):K in S]; a := Min(A); end if;
+    // prune via Eltseq order, not GrpMatElt order: Magma compares matrices over Z/4 in a packed order
+    // that differs from Eltseq order, and minimality here is defined by Eltseq order (see GL2MinimalGenerators)
+    A := [Min([Eltseq(k):k in K|k ne Identity(G)]):K in S]; a := Min(A);
     S := [S[i]:i in [1..#S]|A[i] eq a];
     if #S eq 1 then return GL2MinimalGenerators(S[1]); end if;
     return Min([GL2MinimalGenerators(K):K in S]);

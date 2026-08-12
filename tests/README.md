@@ -67,6 +67,9 @@ Known limitations (flagged, not fixed — see the audit reports):
   needs an external `hashcurves` binary.
 - `utils.m`: `split(RngUPolElt,RngIntElt)` shells out to a hardcoded personal
   Sage path.
-- `gl2base.m`: `GL2MinimalConjugate` can return a non-minimal conjugate when
-  GrpMatElt ordering disagrees with Eltseq ordering (confirmed, not fixed).
 - `polredabs.m`: gp errors are silently swallowed (empty/zero returns).
+
+(The originally-flagged `GL2MinimalConjugate` non-minimality was fixed on
+2026-08-09 after label-impact analysis — see
+`reports/gl2minimalconjugate/investigation.md`; `test_gl2base.m` now
+brute-forces all level-4 classes, the only affected modulus.)

@@ -1689,10 +1689,21 @@ for N in [3,4,5] do
 end for;
 
 print "  GL2MinimalConjugate";
-// FLAGGED (audit 2026-08-06): GL2MinimalConjugate returns non-minimal generator sequences for some
-// subgroups at composite level (GrpMatElt vs Eltseq ordering mismatch in the pruning at line ~3178);
-// left unfixed because its output is the RSZB-label tiebreaker of last resort and changing it could
-// silently change published labels.  Tested here at prime levels only, where it agrees with brute force.
+// The audit-flagged pruning bug (GrpMatElt vs Eltseq ordering) is fixed: Magma's element order over
+// Z/4 (and only Z/4) compares packed rows little-endian, i.e. by (b,a,d,c), so pruning by GrpMatElt
+// Min discarded the conjugate containing the Eltseq-minimal elements (12 of 58 classes at N=4).
+// Verified 2026-08-09: zero published/beta labels depend on the changed outputs (the RSZB tiebreaker
+// never fires at level 4, and the paper pipeline used a different, correct implementation).
+// Exhaustive brute-force check at N=4 (the only affected modulus), including the audit repro:
+assert GL2MinimalConjugate(sub<GL(2,Integers(4))|[3,2,0,3]>) eq [[1,2,2,1]];
+G4 := GL(2,Integers(4));
+for K0 in [K`subgroup : K in Subgroups(G4)] do
+    NN,KK := GL2Level(K0);
+    if NN ne 4 then continue; end if;
+    a := GL2MinimalConjugate(KK);
+    b := Min([GL2MinimalGenerators(Conjugate(KK,t)) : t in GL2RightTransversal(Normalizer(G4,KK))]);
+    assert a eq b;
+end for;
 for N in [3,5] do
     G := GL(2,Integers(N));
     for K0 in [K`subgroup : K in Subgroups(G) | K`order le 48] do
