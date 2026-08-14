@@ -12,7 +12,7 @@ freeze;
 
     Please be sure to cite this paper if you use this software in your research.
 
-    Copyright (c) Andrew V. Sutherland, 2019-2025.  See License file for details on copying and usage.
+    Copyright (c) Andrew V. Sutherland, 2019-2026.  See License file for details on copying and usage.
 */
 
 import "gl2base.m": gl2N1;
@@ -116,7 +116,7 @@ function jNormalPointCount(N,f,htab,q)
     GL2 := GL(2,Integers(N));
     assert GCD(q,N) eq 1;
     // To count j-invariants we only consider nonnegative traces a and divide by 2 for a=0
-    // We exclude j=0 and j=1278 by skipping discriminants -3 and -4 and adjusting the supersingular counts appropriately
+    // We exclude j=0 and j=1728 by skipping discriminants -3 and -4 and adjusting the supersingular counts appropriately
     cnt := 0;
     for a in [1..Floor(2*Sqrt(q))] do  // iterate over positive traces not divisible by p
         if a mod p eq 0 then continue; end if; // supersingular cases handled below
@@ -155,7 +155,7 @@ intrinsic GL2PointCountPrecompute(N::RngIntElt,q::RngIntElt : ind:=GL2Similarity
     GL2 := GL(2,Integers(N));
     s := Vector([Rationals()|0:i in [1..c]]); // we may have non-integral weights coming from j=0,1728
     // To count j-invariants we only consider nonnegative traces a and divide by 2 for a=0
-    // We exclude j=0 and j=1278 by skipping discriminants -3 and -4 and adjusting the supersingular counts appropriately
+    // We exclude j=0 and j=1728 by skipping discriminants -3 and -4 and adjusting the supersingular counts appropriately
     for a in [1..Floor(2*Sqrt(q))] do  // iterate over positive traces not divisible by p
         if a mod p eq 0 then continue; end if; // supersingular cases handled below
         D1 := a^2-4*q; // discriminant of Z[pi] for trace a
@@ -189,8 +189,8 @@ intrinsic GL2PointCountPrecompute(N::RngIntElt,q::RngIntElt : ind:=GL2Similarity
 end intrinsic;
 
 
-intrinsic GL2PointCountsPrecompute(N::RngIntElt,Q::SeqEnum[RngIntElt]) -> ModMatFldElt, SeqEnum[RngIntElt]
-{ Precomputes a matrix of weighted class numbers to be used for fast pointcounting on modular curves of a fixed level N modulo primes p <= B coprime to N. }
+intrinsic GL2PointCountsPrecompute(N::RngIntElt,Q::SeqEnum[RngIntElt]) -> ModMatFldElt
+{ Precomputes a matrix of weighted class numbers to be used for fast pointcounting on modular curves of a fixed level N over Fq for the prime powers q in Q (which must be coprime to N). }
     require #[q:q in Q|GCD(N,q) ne 1] eq 0: "Q must consist of prime-powers coprime to N";
     return Transpose(Matrix([GL2PointCountPrecompute(N,q:ind:=ind,c:=c,htab:=htab):q in Q])) where ind:=GL2SimilarityClassIndexMap(N) where c:=GL2SimilarityClassCount(N) where htab:=ClassNumberTable(4*Max(Q));
 end intrinsic;
@@ -206,6 +206,8 @@ intrinsic GL2PointCounts(H::GrpMat,Q::SeqEnum[RngIntElt],M::ModMatFldElt) -> Seq
     require #Q eq NumberOfColumns(M): "Precomputed point-counting matrix M should have Q columns";
     N := #BaseRing(H);
     require N gt 1: "H must be defined over a ring of cardinality N > 1";
+    H := GL2IncludeNegativeOne(H);
+    if GL2Level(H) eq 1 then return [Integers()|q+1:q in Q]; end if;
     v := Vector(Rationals(),GL2SimilarityCounts(H));
     require Degree(v) eq NumberOfRows(M): "The matrix M was not precomputed for the cardinality N of the base ring of H";
     v := Vector([Rationals()|ExactQuotient(v[i]*j,w[i]):i in [1..Degree(v)]]) where j:=GL2Index(H) where w:=GL2SimilarityCounts(N);
@@ -216,7 +218,9 @@ end intrinsic;
 intrinsic GL2Traces(H::GrpMat,Q::SeqEnum[RngIntElt],M::ModMatFldElt) -> SeqEnum[RngIntElt]
 { Computes vector of Frobenius traces of X_H over finite fields Fq for prime powers q in Q using precomputed matrix M (which should have a column for each q in Q). }
     t := GL2PointCounts(H,Q,M);
-    return [Integers()|Q[i]+1-t[i]:i in [1..#Q]];
+    GL1 := GL(1,BaseRing(H)); D := GL2DeterminantImage(H); dindex := GL1Index(D);
+    tr := dindex gt 1 select func<q,n|GL1![q] in D select dindex*(q+1)-n else 0> else func<q,n|q+1-n>;
+    return [Integers()|tr(Q[i],t[i]):i in [1..#Q]];
 end intrinsic;
 
 intrinsic GL2FrobeniusMatrices(j::FldFinElt) -> SetEnum[AlgMatElt[RngInt]]
@@ -244,7 +248,13 @@ intrinsic GL2FrobeniusMatrices(q::RngIntElt) -> SetEnum[AlgMatElt[RngInt]]
         end for;
     end for;
     // The only case where there is a supersingular Frobenius matrix not realized by j=0,1728 occurs for p=1 mod 12
-    if p mod 12 eq 1 then Include(~S, e mod 2 eq 1 select [0,p^((e-1) div 2),-4*p] else [2*p^(e div 2),0,1]); end if;
+    if p mod 12 eq 1 then
+        if e mod 2 eq 1 then
+            Include(~S,[0,p^((e-1) div 2),-4*p]);
+        else
+            Include(~S,[2*p^(e div 2),0,1]); Include(~S,[-2*p^(e div 2),0,1]);
+        end if;
+    end if;
     M := MatrixRing(Integers(),2);
     return {M!FrobMat(r[1],r[2],r[3]) : r in S};
 end intrinsic;
@@ -254,7 +264,7 @@ intrinsic GL2FrobeniusMatrices(Fq::FldFin) -> SetEnum[AlgMatElt[RngInt]]
     return GL2FrobeniusMatrices(#Fq);
 end intrinsic;
 
-intrinsic GL2jCounts(H::GrpMat,q::RngIntElt:chi:=0) -> SetEnum[FldFinElt]
+intrinsic GL2jCounts(H::GrpMat,q::RngIntElt:chi:=0) -> SeqEnum[RngIntElt]
 { A list of counts of the number of Fq-points above each points of Y(1), ordered as GF(q) is ordered. }
     N,H := GL2Level(GL2IncludeNegativeOne(H));
     require IsPrimePower(q) and GCD(q,N) eq 1: "q must be a prime power that is coprime to the level of H";
@@ -270,7 +280,7 @@ intrinsic GL2jCounts(H::GrpMat,q::RngIntElt:chi:=0) -> SetEnum[FldFinElt]
     return J;
 end intrinsic;
 
-intrinsic GL2jCounts(H::GrpMat,Q::SeqEnum[RngIntElt]) -> SeqEnum[FldFinElt]
+intrinsic GL2jCounts(H::GrpMat,Q::SeqEnum[RngIntElt]) -> SeqEnum[SeqEnum[RngIntElt]]
 { A list of lists of  counts of the number of Fq-points above each points of Y(1), ordered as GF(q) is ordered for q in Q. }
     N,H := GL2Level(GL2IncludeNegativeOne(H));
     if N eq 1 then return [[1:j in GF(q)]:q in Q]; end if;
@@ -278,14 +288,14 @@ intrinsic GL2jCounts(H::GrpMat,Q::SeqEnum[RngIntElt]) -> SeqEnum[FldFinElt]
     return [ GL2jCounts(H,q:chi:=chi) : q in Q ];
 end intrinsic;
 
-intrinsic GL2jInvariants(H::GrpMat,q::RngIntElt:chi:=0) -> SetEnum[FldFinElt]
+intrinsic GL2jInvariants(H::GrpMat,q::RngIntElt:chi:=0) -> SeqEnum[FldFinElt]
 { A list of the affine points in the set j(X_H(Fq)). }
     J := GL2jCounts(H,q:chi:=chi);
     Fq := [j:j in GF(q)];
     return [Fq[i]:i in [1..q]|J[i] gt 0];
 end intrinsic;
 
-intrinsic GL2jInvariants(H::GrpMat,Q::SeqEnum) -> SeqEnum[FldFinElt]
+intrinsic GL2jInvariants(H::GrpMat,Q::SeqEnum) -> List
 { A list of lists of the affine points in the set j(X_H(Fq)) for q in Q. }
     N,H := GL2Level(GL2IncludeNegativeOne(H)); if N eq 1 then return [*[j:j in GF(q)]:q in Q*]; end if;
     chi := GL2PermutationCharacter(H);
@@ -326,7 +336,7 @@ intrinsic GL2PointCount(N::RngIntElt,htab::SeqEnum[RngIntElt],f::UserProgram,C::
     return j+j0+j1728+C[q mod N];
 end intrinsic;
 
-intrinsic GL2PointCounts(H::GrpMat,Q::SeqEnum[RngIntElt]) -> SeqEnum
+intrinsic GL2PointCounts(H::GrpMat,Q::SeqEnum) -> SeqEnum
 { Sequence of Fq-rational points on X_H for q in Q (which must be prime powers or lists of prime powers coprime to the level of H). }
     if #Q eq 0 then return []; end if;
     // timer := Cputime();
@@ -472,7 +482,7 @@ intrinsic GL2QInfinite(H::GrpMat:MustContainNegativeOne:=false) -> BoolElt
 end intrinsic;
 
 intrinsic GL2QObstructions(H::GrpMat:g:=-1,B:=0,T:=[],C:=[]) -> SeqEnum[RngIntElt]
-{ List of good places p where X_H has no Qp-points (p=0 is used for the real place). Whent specified, g:=GL2Genus(H), T:=GL2Traces(H,B), C:=GL2RationalCuspCounts(H).  B will set to NthPrime(T) if T is nonempty or to 4*g^2 if neither B nor T is specified. }
+{ List of good places p where X_H has no Qp-points (p=0 is used for the real place). When specified, g:=GL2Genus(H), T:=GL2Traces(H,B:ZeroFill:=true), C:=GL2RationalCuspCounts(H).  B will be set to NthPrime(#T) if T is nonempty or to 4*g^2 if neither B nor T is specified. }
     N,H := GL2Level(GL2IncludeNegativeOne(H)); if N eq 1 then return [Integers()|]; end if;
     require GL2DeterminantIndex(H) eq 1: "H must have determinant index 1.";
     G := GL2Ambient(N); inv := GL2SimilarityClassMap(N);
@@ -494,9 +504,9 @@ intrinsic GL2QObstructions(H::GrpMat:g:=-1,B:=0,T:=[],C:=[]) -> SeqEnum[RngIntEl
 end intrinsic;
 
 intrinsic GL2GonalityBounds(H::GrpMat:ratcuspcnts:=[],ratpts:=-2,g:=-1,psl2index:=-1) -> SeqEnum[RngIntElt], RngIntElt
-{ Returns a quadruple listing lower and upper bounds on the Q-gonality of X_H followed by lower and upper bounds on the Qbar-gonality (the genus > 1 the lower bounds for Q and Qbar will be the same).
+{ Returns a quadruple listing lower and upper bounds on the Q-gonality of X_H followed by lower and upper bounds on the Qbar-gonality (for genus > 1 the lower bounds for Q and Qbar will be the same).
   The second return value is the prime power used to prove lower bounds via point-counting (or 0 if not relevant).
-  Except for special handling of genus 0,1,2 curves, this algorithm computes gonality upper bounds as the minimum of the degree of the map to X(1) and either g+1 or 2*g-1 (depending on whether rational points are known or not, for qbar they always are),
+  Except for special handling of genus 0,1,2 curves, this algorithm computes gonality upper bounds as the minimum of the degree of the map to X(1) and either g+1 (g, if g > 1) or 2*g-2 (depending on whether rational points are known or not, for qbar they always are),
   and computes gonality lower bounds using the Abramovich-Kim-Sarnak bound gon_Qbar(X_H) >= 325*psl2index/2^15 and the bounds gon_Qbar(X_H) >= #X_H(Fq)/(q+1) for each prime power q.
 
 }
