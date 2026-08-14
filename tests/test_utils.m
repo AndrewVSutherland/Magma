@@ -276,8 +276,9 @@ for D in [-d:d in [3..200]|(-d) mod 4 in [0,1]] do   // definition: sum of h(E) 
     assert KroneckerClassNumber(D) eq &+[ClassNumber(e^2*D0):e in Divisors(fc)];
 end for;
 
-// FLAGGED (audit 2026-08-06): split(f::RngUPolElt,p::RngIntElt) pipes to Sage via the
-// hardcoded personal path /home/drew/Dropbox/magma/split.py and cannot work elsewhere.
+// audit 2026-08-06 item 11: split(f::RngUPolElt,p::RngIntElt) (which piped to Sage via a
+// hardcoded personal path) was removed; verify the polynomial overload no longer exists.
+ok := false; try _ := split(x^2+1,3); catch e ok := true; end try; assert ok;
 
 print "  Log";
 R7 := Integers(7);
@@ -372,9 +373,22 @@ for p in [2,3,5,13], i in [1..5] do
     assert facpat(fp) eq pat;                        // finite-field branch, squarefree input
     assert facpat(fp:SquareFree:=true) eq pat;       // fast path agrees on squarefree input
 end for;
-// FLAGGED (audit 2026-08-06): for NON-squarefree f over a finite field, facpat returns the
-// pattern of the radical (multiplicities dropped), disagreeing with the generic overload
-// which counts multiplicity; convention ambiguity left to the maintainer.
+// audit 2026-08-06 item 10: for non-squarefree f over a finite field, facpat now counts
+// repeated factors with multiplicity, matching the generic {* Degree(a[1])^^a[2] *} semantics.
+assert facpat((x+1)^2*(x^2+x+7),5) eq {* 1^^2, 2 *};              // audit repro (was {* 1, 2 *})
+assert facpat((x+1)^2*(x^2+x+7),3) eq {* 1^^4 *};                 // f mod 3 = (x+1)^2*(x+2)^2
+assert facpat(PolynomialRing(GF(2))![0,0,1,3,3,1]) eq {* 1^^5 *}; // x^2*(x+1)^3, wild char 2
+for p in [2,3,5,13], i in [1..10] do
+    fp := PolynomialRing(GF(p))![Random(0,p-1):j in [1..Random(3,9)]];
+    if Degree(fp) le 0 then continue; end if;
+    pat := {* Degree(a[1])^^a[2] : a in Factorization(fp) *};     // inline recomputation
+    assert facpat(fp) eq pat;                                     // finite-field branch, any input
+    assert &+[Multiplicity(pat,d)*d : d in Set(pat)] eq Degree(fp);  // multiset sums to degree
+    cs := [Integers()!c : c in Coefficients(fp)];
+    assert facpat(Rx!cs,p) eq pat and facpat(cs,p) eq pat;        // mod-p overloads agree
+    assert facpat(cs) eq facpat(Rx!cs);                           // char-0 overloads agree
+    if IsSquarefree(fp) then assert facpat(fp:SquareFree:=true) eq pat; end if;
+end for;
 
 print "  EasyFactorization";
 for n in [-12,-1,1,30,97,2^10*3^5] do
@@ -476,6 +490,16 @@ for p in [3,5] do
         // canonical on orbits: quadratic twist gives identical output
         assert NormalizedIgusaInvariants(HyperellipticCurve(ns*fq)) eq NJ;
     end for;
+end for;
+// dead-code removal (audit 2026-08-06): the "elif inv[4] ne 0" branch of the Fp normalization
+// was mathematically unreachable (4*J8 = J2*J6 - J4^2 forces J8=0 when J2=J4=J6=0 for odd p;
+// p=2 returns earlier); pin the J2=J4=J6=J8=0 case (y^2 = x^5 + 1) still normalizing correctly.
+for p in [7,11,13] do
+    fq5 := PolynomialRing(GF(p))![1,0,0,0,0,1];
+    J0 := IgusaInvariants(HyperellipticCurve(fq5));
+    assert [J0[i] : i in [1..4]] eq [GF(p)|0,0,0,0] and J0[5] ne 0;
+    N0 := NormalizedIgusaInvariants(HyperellipticCurve(fq5));
+    assert [N0[i] : i in [1..4]] eq [0,0,0,0] and N0[5] eq PowerClassRepresentative(J0[5],5);
 end for;
 
 print "  NormalizedShiodaInvariants";
@@ -605,8 +629,9 @@ for p in [5,7,11], nn in [2,3,5] do
     end for;
 end for;
 assert PowerClassRepresentative(0,7,2) eq 0;
-// FLAGGED (audit 2026-08-06): the optional parameter Root:=false of
-// PowerClassRepresentative is declared but never used (passing Root:=true does nothing).
+// audit 2026-08-06 item 12: the unused optional parameter Root of PowerClassRepresentative
+// was removed; passing it must now raise an error.
+ok := false; try _ := PowerClassRepresentative(3,7,2:Root:=true); catch e ok := true; end try; assert ok;
 
 print "  SquareFreePoly";
 for i in [1..12] do

@@ -358,6 +358,16 @@ assert NumberOfNewspaces(1:SkipWeightOne:=true) eq 0;
 assert NumberOfNewspaces(3:SkipWeightOne:=true) eq 0;
 assert NumberOfNewspaces(3:SkipWeightOne:=true,TrivialCharOnly:=true) eq 0;
 assert NumberOfNewspaces(4:SkipWeightOne:=true) eq 1;
+// BUG (fixed): with SkipWeightOne and MaxN > B div 4 the summand Min(Floor(Sqrt(B/N)),Maxk)-1
+// went negative for large N, so NumberOfNewspaces(4:SkipWeightOne:=true,MaxN:=5) returned -2 instead of 1
+assert NumberOfNewspaces(4:SkipWeightOne:=true,MaxN:=5) eq 1; // counts just the space 1.2
+assert NumberOfNewspaces(4:SkipWeightOne:=true,MaxN:=5,TrivialCharOnly:=true) eq 1;
+assert NumberOfNewspaces(4:SkipWeightOne:=true,MaxN:=100) eq 1;
+// clamping must not change default behavior
+for B in [1,2,3,4,5,16,37,60] do
+    assert NumberOfNewspaces(B:SkipWeightOne:=true) eq &+[NumberOfCharacterOrbits(N)*#[k:k in [2..B]|N*k^2 le B]:N in [1..B]];
+    assert NumberOfNewspaces(B:SkipWeightOne:=true,MaxN:=B) eq NumberOfNewspaces(B:SkipWeightOne:=true);
+end for;
 
 print "  Regression: QDimensionNewEisensteinForms arity";
 // BUG (fixed): the parity-mismatch branch of QDimensionNewEisensteinForms(chi,k) did 'return 0,0;'
@@ -408,13 +418,11 @@ for N in [1..20] do for k in [1,3,5,7] do
     assert QDimensionModularForms(N,k) eq 0;
 end for; end for;
 
-// FLAGGED (audit 2026-08-06): childmin (local function, unused) has a leftover debug print,
-//   passes t instead of t^2 to Gpk, and returns wrong values for its documented purpose; left as-is.
-// FLAGGED (audit 2026-08-06): newersz1p (local function, unused) is marked '// TODO: currently broken'
-//   by the author and was not audited further.
-// NOTE (audit 2026-08-06): dead local functions popa1p (double SNbase factor in k>2 branch) and
-//   nutl (m(1-m) typo in the v=4 branch) were fixed; they are unreachable from any intrinsic, so no
-//   intrinsic-level regression test is possible.
+// DEAD CODE REMOVED (audit 2026-08-06, dispositioned 2026-08-09): local functions childmin
+//   (broken WIP with a leftover debug print), newersz1p (author-marked '// TODO: currently broken'),
+//   nutl (only referenced by newersz1p), and the unused local cond func were removed from mfdims.m;
+//   none were reachable from any intrinsic, so no intrinsic-level regression test is possible.
+// NOTE (audit 2026-08-06): dead local function popa1p (double SNbase factor in k>2 branch) was fixed.
 
 print "ALL TESTS PASSED test_mfdims.m";
 quit;

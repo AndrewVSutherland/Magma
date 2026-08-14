@@ -5,7 +5,7 @@ freeze;
     This module implements functions for reading, writing, and indexing text files that contain GL2 lattice data,
     including functions for parsing, comparing, and sorting labels (both LMFDB and RSZB labels)
 
-    Copyright (c) Andrew V. Sutherland, 2019-2025.  See License file for details on copying and usage.
+    Copyright (c) Andrew V. Sutherland, 2019-2026.  See License file for details on copying and usage.
 */
 
 import "gl2base.m": ConjugateToRationalSubgroup, gl2N1;
@@ -555,8 +555,6 @@ intrinsic GL2LookupLabel(Z::Tup, H::GrpMat : NotFound:="?") -> MonStgElt
     T := Conjugates(G,H); // here we hope that the index of H in the normalizer of <H,-I> is not too bad
     for i:=1 to #S do if grp(S[i]) in T then return S[i][1]; end if; end for;
     return NotFound;
-    M := [i:i in [1..#S]|grp(S[i]) in T];  if #M eq 0 then return NotFound; end if; assert #M eq 1;
-    return M[1];
 end intrinsic;
 
 intrinsic SL2LookupLabel(Z::Assoc, H::GrpMat : NotFound:="?") -> MonStgElt, GrpMatElt
@@ -601,8 +599,6 @@ intrinsic SL2LookupLabel(Z::Tup, H::GrpMat : NotFound:="?") -> MonStgElt
     T := Conjugates(G,H);
     for i:=1 to #S do if grp(S[i]) in T then return S[i][1]; end if; end for;
     return NotFound;
-    M := [i:i in [1..#S]|grp(S[i]) in T];  if #M eq 0 then return NotFound; end if; assert #M eq 1;
-    return M[1];
 end intrinsic;
 
 /*

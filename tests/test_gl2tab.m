@@ -243,8 +243,56 @@ ZSgL3 := SL2LabelTable(ZSg : N:=3);
 assert #ZSgL3 eq 0;
 System("rm -f tests/tmp_gl2tab_*.txt");
 
-// FLAGGED (audit 2026-08-06): GL2LookupLabel(Z::Tup)/SL2LookupLabel(Z::Tup) contain dead code
-// after 'return NotFound;' (would return an integer index instead of a label if re-enabled).
+print "  GL2LookupLabel/SL2LookupLabel (Tup) NotFound paths";
+// REGRESSION (dead-code removal, gl2tab.m GL2LookupLabel(Z::Tup)/SL2LookupLabel(Z::Tup)):
+// unreachable statements after the final unconditional 'return NotFound;' were removed
+// (had they ever become reachable they would have returned an integer index, not a label).
+// Pin the surviving behavior: hits return string labels and a fine group that reaches the
+// conjugate-search loop without matching falls through to NotFound, in both flavors.
+fp := Open("tests/tmp_gl2tab_key.txt","w");
+Puts(fp,"label:key:gens");
+Puts(fp,Sprintf("2.2.0.a.1:%o:%o", GL2SubgroupKey(H22), sprint(GL2Generators(H22))));
+Puts(fp,Sprintf("2.3.0.a.1:%o:%o", GL2SubgroupKey(H23), sprint(GL2Generators(H23))));
+Flush(fp); delete fp;
+fp := Open("tests/tmp_gl2tab_fined.txt","w");
+Puts(fp,"label:gens");
+Puts(fp,"4.4.0-2.a.1.1:[[0,1,3,3],[1,2,2,1],[3,0,0,3],[3,2,0,3]]"); // decoy: level 4, index 4, NOT conjugate to Hf
+Flush(fp); delete fp;
+fp := Open("tests/tmp_gl2tab_fine.txt","w");
+Puts(fp,"label:gens");
+Puts(fp,Sprintf("4.4.0-2.a.1.1:%o", sprint(GL2Generators(Hf))));
+Flush(fp); delete fp;
+ZT := GL2LookupTable("tests/tmp_gl2tab_key.txt","tests/tmp_gl2tab_fine.txt");
+lbl := GL2LookupLabel(ZT,Hf);
+assert Type(lbl) eq MonStgElt and lbl eq "4.4.0-2.a.1.1";
+ZTd := GL2LookupTable("tests/tmp_gl2tab_key.txt","tests/tmp_gl2tab_fined.txt");
+assert GL2LookupLabel(ZTd,Hf) eq "?";                                   // loop fallthrough -> NotFound
+ZTdg := GL2LookupTable("tests/tmp_gl2tab_key.txt","tests/tmp_gl2tab_fined.txt" : makegroups:=true);
+assert GL2LookupLabel(ZTdg,Hf : NotFound:="!") eq "!";
+// SL2 flavor: Sf = SL2 part of Hf (level 4, index 4, no -I, coarse closure 2.2.0.a.1)
+Sf := SL2Intersection(Hf); _,Sf := SL2Level(Sf);
+assert not SL2ContainsNegativeOne(Sf);
+SC := SL2IncludeNegativeOne(Sf); _,SC := SL2Level(SC);
+fp := Open("tests/tmp_gl2tab_skey.txt","w");
+Puts(fp,"label:key:gens");
+Puts(fp,Sprintf("2.2.0.a.1:%o:%o", SL2SubgroupKey(SC), sprint(SL2Generators(SC))));
+Flush(fp); delete fp;
+fp := Open("tests/tmp_gl2tab_sfine.txt","w");
+Puts(fp,"label:gens");
+Puts(fp,Sprintf("4.4.0-2.a.1.1:%o", sprint(SL2Generators(Sf))));
+Flush(fp); delete fp;
+fp := Open("tests/tmp_gl2tab_sfined.txt","w");
+Puts(fp,"label:gens");
+Puts(fp,"4.4.0-2.a.1.1:[[1,3,2,3],[2,3,3,1],[3,0,0,3]]"); // decoy: SL2 level 4, index 4, NOT conjugate to Sf
+Flush(fp); delete fp;
+ZST := SL2LookupTable("tests/tmp_gl2tab_skey.txt","tests/tmp_gl2tab_sfine.txt");
+slbl := SL2LookupLabel(ZST,Sf);
+assert Type(slbl) eq MonStgElt and slbl eq "4.4.0-2.a.1.1";
+ZSTd := SL2LookupTable("tests/tmp_gl2tab_skey.txt","tests/tmp_gl2tab_sfined.txt");
+assert SL2LookupLabel(ZSTd,Sf) eq "?";                                  // loop fallthrough -> NotFound
+ZSTdg := SL2LookupTable("tests/tmp_gl2tab_skey.txt","tests/tmp_gl2tab_sfined.txt" : makegroups:=true);
+assert SL2LookupLabel(ZSTdg,Sf : NotFound:="!") eq "!";
+System("rm -f tests/tmp_gl2tab_*.txt");
 
 print "  GL2SLabel";
 // ground truth from LMFDB: SELECT label,"Slabel",generators FROM gps_gl2zhat_fine WHERE "Slabel" IS NOT NULL AND level IN (5,7,11)

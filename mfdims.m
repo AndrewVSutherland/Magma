@@ -6,7 +6,7 @@ freeze;
     This module implements various intrinsics for efficiently computing Q-dimensions of spaces of modular forms.
     The TraceForm intrinsic shells out to Pari/GP and won't work if gp is not installed.
     
-    Copyright (c) Andrew V. Sutherland, 2017-2025.  See License file for details on copying and usage.
+    Copyright (c) Andrew V. Sutherland, 2017-2026.  See License file for details on copying and usage.
 */
 
 ZZ := Integers();
@@ -300,8 +300,8 @@ intrinsic NumberOfNewspaces (B::RngIntElt:MaxN:=0,Maxk:=0,SkipWeightOne:=false,T
     if MaxN eq 0 then MaxN := SkipWeightOne select B div 4 else B; end if;
     if Maxk eq 0 then Maxk := Floor(Sqrt(B)); end if;
     k0 := SkipWeightOne select 1 else 0;
-    if TrivialCharOnly then return &+[ZZ|Min(Floor(Sqrt(B/N)),Maxk)-k0:N in [1..MaxN]]; end if;
-    return &+[ZZ|(Min(Floor(Sqrt(B/N)),Maxk)-k0) * NumberOfCharacterOrbits(N) : N in [1..MaxN]];
+    if TrivialCharOnly then return &+[ZZ|Max(Min(Floor(Sqrt(B/N)),Maxk)-k0,0):N in [1..MaxN]]; end if;
+    return &+[ZZ|Max(Min(Floor(Sqrt(B/N)),Maxk)-k0,0) * NumberOfCharacterOrbits(N) : N in [1..MaxN]];
 end intrinsic;
 
 
@@ -546,8 +546,6 @@ function pskp(k,N,p)
     return b and (p+1) mod u eq 0 select 2*EulerPhi(u) else 0;
 end function;
 
-cond := func<D|ZZ!Sqrt(D div FundamentalDiscriminant(D))>;
-
 function popaNp(k,N,p)
     n := p; n4 := 4*p; b := Floor(Sqrt(n4/N)); if b^2*N eq n4 then b -:= 1; end if;
     ww := func<t2N|w where w := (IsEven(v) and (((n4-t2N) div v^2)*N mod 4) in [1,2]) select v div 2 else v
@@ -774,31 +772,6 @@ function ctlraw(t,l,phi,N)
 end function;
 
 
-function nutl(t,l,N:fast:=true)
-    assert IsPrime(l) and N mod l^2 ne 0;
-    if t mod GCD(N,l) ne 0 then return 0; end if;
-    D := t^2-4*l; assert D lt 0;
-    d := FundamentalDiscriminant(D); _,m := IsSquare(D div d);
-    if m eq 1 and fast then return Kd(d,N); end if;
-    if IsPrime(m) and fast then
-        v := Valuation(N,m);
-        s := KroneckerSymbol(d,m);
-        if v eq 0 then mm := (m+1-s);
-        elif v eq 1 then mm := s-1;
-        elif v eq 2 then mm := m^2-2*m-1+s;
-        elif v eq 3 then mm := s eq 0 select 1-m^2 else (m-s)*(m-1)*(s-1);
-        elif v eq 4 then mm := s eq 0 select m*(1-m) else -(m-s)*m*s;
-        elif v eq 5 then mm := s eq 0 select m^2 else 0;
-        else mm := 0;
-        end if;
-        return Kd(d,N div m^v)*mm;
-    else
-        assert false;
-        //btl:= func<phi|&*[ZZ|p[1]^(p[2]-1)*(p[1]-KroneckerSymbol(d,p[1])):p in Factorization(phi)]>;
-        //return &+[btl(phi)*&+[ctlraw(t,l,phi,a)*betap(l,N div a):a in Divisors(N)]:phi in Divisors(m)];
-    end if;
-end function;
-
 function Kd(d,N)
     return &*[ZZ|(n eq 1 select KroneckerSymbol(d,p)-1 else
                   (n eq 2 select (d mod p eq 0 select -1 else -KroneckerSymbol(d,p)) else
@@ -1023,26 +996,6 @@ hf := func<d,f|&+[MoebiusMu(e)*KroneckerSymbol(d,e)*SumOfDivisors(f div e):e in 
 HH := func<n,D|IsDivisibleBy(m,a*b) select (ZZ!(a2b*KroneckerSymbol(N,(n div (a2b)))*hf(d,f))
                where f := ZZ!Sqrt(N div d) where N := (D div (a*b)^2)) else 0 where a2b := a^2*b where b,a:=SquareFree(GCD(n,D)) where m := ZZ!Sqrt(D div d) where d := FundamentalDiscriminant(D)>;
 
-// TODO: currently broken
-function newersz1p(k,N,p)
-    assert IsEven(k) and k ge 2;
-    if p eq 2 then return newtomo2(k,N); end if;
-    if p eq 3 then return newtomo3(k,N); end if;
-    if N mod p eq 0 then return newtomobadp(k,N,p); end if;
-    assert IsSquarefree(N);
-    mu := MoebiusMu; kron := KroneckerSymbol;
-    g := k eq 2 select func<t|1> else func<t|(Vector(ZZ,[1,t^2-p])*Matrix(ZZ,2,[0,-p^2,1,t^2-2*p])^(k div 2 - 2))[2]>;
-    b := Floor(2*Sqrt(p));
-    if N eq 1 then return (k eq 2 select p+1 else 0) + (-(2*&+[g(t)*H12(4*p-t^2) : t in [1..b]] + g(0)*H12(4*p)) div 24) - 1; end if;
-    HM := func<M,D|b*KroneckerSymbol(d,M div b)*H12(-d) where d := ExactQuotient(D,b^2) where b:=GCD(M,D)>;
-    t0 := g(0)*ClassNumber(p mod 4 eq 1 select -4*p else -p)*nutl(0,p,N) div 2;
-    h6 := func<d|(6 div w)*ClassNumber(d) where  w := d lt -4 select 1 else (d lt -3 select 2 else 3)>;
-    sfnutl:=func<d,m,N|&+[ZZ|mu(N div (M*c))*c*kron(d,M)*&+[mu(e)*kron(d,e)*SumOfDivisors(f div e):e in Divisors(f)] where f:=m div c:M in Divisors(N div GCD(N,d*m^2)),c in Divisors(GCD(N,m))] where bad := &*[ZZ|p:p in PrimeDivisors(d)|m mod p ne 0]>;
-    tpos := &+[g(t)*h6(d)*sfnutl(d,m,N) where m := ZZ!Sqrt(D div d) where d := FundamentalDiscriminant(D) where D:=t^2-4*p : t in [1..b]] div 6; 
-    tpos := &+[g(t)*h6(d)*&*[ZZ|mu(N div M)*HH(M,D):M in Divisors(N)] where d:=FundamentalDiscriminant(D) where D:=t^2-4*p: t in [1..b]] div 6;
-    return (k eq 2 select mu(N)*(p+1) else 0) - t0 - tpos;
-end function;
-
 function newsz1p(k,m)
     dm := Divisors(m); am := [ZZ|alpha(m div mm):mm in dm];
     skpp := [skm1p(k,mm):mm in dm];
@@ -1085,20 +1038,6 @@ function Spmin(p,e,t,n,d,l) // t^2-4n = l^2d with d fundamental, n prime, s=0<e
     else
         return g gt 0 select KroneckerSymbol(d,p)-1 else 0;
     end if;
-end function;
-
-function childmin(k,N,n) // Theorem 2.1 of https://arxiv.org/abs/2101.05663 for the case chi=1 and n is prime, so s=0
-    if IsOdd(k) or N mod n^2 eq 0 then return 0; end if;
-    Q := Factorization(N); b := Floor(2*Sqrt(n));
-    C2 := ExactQuotient(&+[ZZ|Gpk(k,t,n)*H12(-d)*&*[ZZ|Sp(p,d,l):p in PrimeDivisors(l)]*&*[QQ|Spmin(q[1],q[2],t,n,d,l):q in Q]
-          where l:=ZZ!Sqrt(D div d) where d:=FundamentalDiscriminant(D) where D:=t^2-4*n : t in [-b..b]],24);
-    if #Q eq 1 and Q[1][1] eq 2 and IsEven(Q[1][2]) and Q[1][2] gt 2 and n ne 2 then
-        gamma := Valuation(n-1,2); ee := Q[1][2] div 2 -1;
-        C3 := gamma ge ee select 2^(Q[1][2] div 2)*(n+1) div 8 * (1 - (gamma eq ee select 2 else 0)) else 0;
-    else C3 := N eq 1 select 1 else 0; end if;
-    C4 := k eq 2 select MoebiusMu(N)*(N mod n eq 0 select 1 else (n+1)) else 0;
-    print C2,C3,C4;
-    return -C2-C3+C4; // C1 = 0 because n is prime
 end function;
 
 intrinsic ALNewDims(N::RngIntElt,k::RngIntElt) -> SeqEnum[RngIntElt], RngIntElt, RngIntElt
