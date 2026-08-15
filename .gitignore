@@ -1,1 +1,4 @@
 *.sig
+tests/logs/
+tests/tmp_*
+gl2classno.dat
